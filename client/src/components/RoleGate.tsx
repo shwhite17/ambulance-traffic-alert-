@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { api, demoLogin, errorText, login } from '../lib/api';
 import { saveSession, useSession } from '../lib/session';
 import type { DemoAccount, Role, Session } from '../lib/types';
+import { Ambulance, ChevronRight, Hospital, MonitorDot, Siren, type LucideIcon } from 'lucide-react';
 import { Button, ErrorBanner, TopBar } from './ui';
 
 const ROLE_TITLE: Record<Role, string> = {
@@ -10,6 +11,7 @@ const ROLE_TITLE: Record<Role, string> = {
   hospital: 'Hospital desk',
   admin: 'Control room',
 };
+const ROLE_ICON: Record<Role, LucideIcon> = { driver: Ambulance, officer: Siren, hospital: Hospital, admin: MonitorDot };
 
 /** Renders children with a session for `role`, or a login screen. */
 export function RoleGate({ role, children }: { role: Role; children: (s: Session, logout: () => void) => ReactNode }) {
@@ -53,39 +55,55 @@ function LoginScreen({ role, onLogin }: { role: Role; onLogin: (s: Session) => v
     }
   };
 
+  const Icon = ROLE_ICON[role];
   return (
-    <div className="min-h-full">
-      <TopBar title={`${ROLE_TITLE[role]} — sign in`} />
-      <main className="mx-auto max-w-lg space-y-6 p-4">
+    <div className="grid-bg min-h-full">
+      <TopBar title={`${ROLE_TITLE[role]} · sign in`} />
+      <main className="mx-auto max-w-md space-y-6 px-4 py-10">
+        <div className="text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-white/5 ring-1 ring-white/10">
+            <Icon size={26} className="text-white" />
+          </span>
+          <h1 className="mt-4 text-2xl font-bold">{ROLE_TITLE[role]}</h1>
+          <p className="text-sm text-slate-400">Sign in to continue</p>
+        </div>
         <ErrorBanner error={error} />
         {accounts.length > 0 && (
-          <section>
-            <h2 className="mb-2 font-semibold">Demo accounts</h2>
-            <div className="grid gap-2">
+          <section className="panel p-2">
+            <h2 className="px-3 pt-2 pb-1 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Demo accounts · one tap</h2>
+            <div className="max-h-72 overflow-y-auto">
               {accounts.map((a) => (
-                <Button key={a.email} variant="ghost" disabled={busy} className="text-left" onClick={() => run(() => demoLogin(a.email))}>
-                  <span className="block">{a.name}</span>
-                  <span className="block text-sm font-normal text-slate-500">{a.email}</span>
-                </Button>
+                <button
+                  key={a.email}
+                  disabled={busy}
+                  onClick={() => run(() => demoLogin(a.email))}
+                  className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5 disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-white">{a.name}</span>
+                    <span className="block truncate text-xs text-slate-500">{a.email}</span>
+                  </span>
+                  <ChevronRight size={16} className="shrink-0 text-slate-500" />
+                </button>
               ))}
             </div>
           </section>
         )}
         <form
-          className="space-y-3 rounded-xl bg-white p-4 shadow-sm"
+          className="panel space-y-3 p-5"
           onSubmit={(e) => {
             e.preventDefault();
             void run(() => login(email, password));
           }}
         >
-          <h2 className="font-semibold">Sign in with email</h2>
+          <h2 className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Sign in with email</h2>
           <label className="block">
-            <span className="text-sm text-slate-600">Email</span>
-            <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <span className="text-sm text-slate-400">Email</span>
+            <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-blue-500" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label className="block">
-            <span className="text-sm text-slate-600">Password</span>
-            <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <span className="text-sm text-slate-400">Password</span>
+            <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-blue-500" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
           </label>
           <Button type="submit" disabled={busy} className="w-full">
             Sign in

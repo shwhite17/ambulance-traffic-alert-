@@ -20,8 +20,8 @@ function Summary({ session }: { session: Session }) {
       .catch((e) => setError(errorText(e)));
   }, [id, session.token]);
   return (
-    <div className="min-h-full">
-      <TopBar title={`Trip #${id} summary`} right={<Link to="/control" className="text-sm underline">Control room</Link>} />
+    <div className="grid-bg min-h-full">
+      <TopBar title={`Trip #${id} summary`} right={<Link to="/control" className="text-sm text-slate-400 hover:text-white">Control room</Link>} />
       <main className="mx-auto max-w-5xl p-4">
         <ErrorBanner error={error} />
         {summary && <TripSummaryView summary={summary} />}

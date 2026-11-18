@@ -226,7 +226,16 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
 
   // Serve the built React app from the same origin in production.
   if (clientDist && existsSync(clientDist)) {
-    app.use(express.static(clientDist, { maxAge: '1h', index: false }));
+    app.use(
+      express.static(clientDist, {
+        maxAge: '1h',
+        index: false,
+        // The service worker must always be revalidated so new deploys roll out.
+        setHeaders: (res, path) => {
+          if (path.endsWith('sw.js')) res.setHeader('Cache-Control', 'no-cache');
+        },
+      }),
+    );
     app.get(/^\/(?!api|socket\.io|health).*/, (_req, res) => res.sendFile('index.html', { root: clientDist }));
   }
 

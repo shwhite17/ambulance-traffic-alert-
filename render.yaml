@@ -1,0 +1,29 @@
+# Render Blueprint: one web service serving the API, Socket.IO and the built client.
+# Deploy: Render dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: ambulance-traffic-alert
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to India
+    branch: main
+    autoDeploy: true
+    # --include=dev: NODE_ENV=production would otherwise skip the build tools (vite, tsc).
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true # random, created by Render, never in git
+      - key: DEMO_MODE
+        value: "true"
+      # Free instances have no persistent disk; the DB is re-seeded on each start,
+      # which suits a demo (every boot starts clean).
+      - key: DB_PATH
+        value: data/app.db
+      - key: LOG_LEVEL
+        value: info

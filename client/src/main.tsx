@@ -10,6 +10,11 @@ import { ControlPage } from './pages/ControlPage';
 import { DemoPage } from './pages/DemoPage';
 import { SummaryPage } from './pages/SummaryPage';
 
+// Installable app (PWA). Production only, so dev hot-reload isn't cached.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('/sw.js'));
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

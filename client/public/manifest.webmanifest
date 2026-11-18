@@ -1,0 +1,24 @@
+{
+  "name": "Ambulance Traffic Alert",
+  "short_name": "AmbAlert",
+  "description": "Warns traffic officers about a minute before an ambulance reaches their junction, and escalates if nobody responds.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "categories": ["medical", "navigation", "utilities"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Officer on duty", "short_name": "Officer", "url": "/officer", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Start emergency trip", "short_name": "Driver", "url": "/driver", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Command centre", "short_name": "Control", "url": "/control", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

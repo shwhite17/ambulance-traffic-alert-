@@ -56,10 +56,10 @@ Open http://localhost:5173 and press **Run live demo**.
 
 ## Demo script (~3 min)
 
-1. **Problem:** "Officers hear the siren too late." Open **Run live demo**: map and simulator on the left, every officer on the route on the right. Press **Enable sound**.
-2. **Start simulated trip** (40 km/h). Junction 1 turns red with a siren → **Acknowledge** → "Clear the lane".
-3. **Escalation:** press **Next junction**, and *don't* acknowledge. After 10 s the card shows ESCALATED and the backup patrol card lights up.
-4. **ETA logic:** switch to 90 km/h → the next alert fires about 1.5 km out instead of 500 m. The event feed names the rule that fired.
+1. **Problem:** "Officers hear the siren too late." Press **Launch live demo**. The command centre opens with the map, the junction corridor and the officer app live in a phone frame. Turn **Sound** on.
+2. **Dispatch simulated ambulance** (40 km/h). The amber alert zone runs ahead of the ambulance; Junction 1 enters it, the phone turns red with a siren → **Acknowledge** → "Clear the lane".
+3. **Escalation:** press **Next junction**, and *don't* acknowledge. After 10 s the corridor shows ESCALATED and **Acknowledge as backup** appears; the escalations counter goes up.
+4. **ETA logic:** switch to 90 km/h. The alert zone stretches to about 1.5 km and the HUD switches to "ETA rule". The event feed names the rule that fired.
 5. Show the **hospital** view (ETA, "Team ready") and an officer's **phone** view at `/officer`.
 6. **Stop** → trip summary: response times, escalations, zero stops, and the clearly labeled *simulated* time saved.
 7. **Close honestly:** we alert humans and don't control signals. Next steps: official integration, SMS fallback, signal detection from map data.
