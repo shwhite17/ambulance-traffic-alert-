@@ -127,6 +127,46 @@ describe('scripted simulator run through the real pipeline (Bengaluru route)', (
     expect(emitted.some((e) => e.event === 'alert:escalated')).toBe(false);
   });
 
+  it('keeps a replayable feed history without route geometry, and skips never-alerted passes', () => {
+    const { trips, simulator, emitted } = stack;
+    simulator.start({ routeId: 'blr-old-airport-road', speedKmh: 40, startAtM: 2_000 });
+    while (!emitted.some((e) => e.event === 'alert:new')) vi.advanceTimersByTime(1_000);
+    const hist = trips.recentEvents();
+    expect(hist.map((h) => h.event)).toEqual(['trip:started', 'alert:new']);
+    expect((hist[0]!.payload as any).route.coordinates).toEqual([]);
+    // Starting at 2 km passed J1 without alerting it: that must not appear in the feed.
+    expect(emitted.some((e) => e.event === 'alert:passed' && !e.payload.alertId)).toBe(true);
+  });
+
+  it('demo reset closes everything, wipes trip history, cancels escalations and allows a fresh start', () => {
+    const { trips, simulator, emitted, db, userByEmail } = stack;
+    simulator.start({ routeId: 'blr-old-airport-road', speedKmh: 40 });
+    while (!emitted.some((e) => e.event === 'alert:new')) vi.advanceTimersByTime(1_000);
+
+    simulator.stopAll();
+    trips.resetAll(userByEmail('control@demo.in').id);
+
+    expect(trips.activeCount).toBe(0);
+    expect(trips.recentEvents()).toEqual([]);
+    expect(emitted.some((e) => e.event === 'demo:reset')).toBe(true);
+    expect(emitted.some((e) => e.event === 'alert:closed')).toBe(true); // officer screens get cleared
+    const counts = db.prepare('SELECT (SELECT COUNT(*) FROM trips) t, (SELECT COUNT(*) FROM alerts) a, (SELECT COUNT(*) FROM location_samples) l').get() as any;
+    expect(counts).toMatchObject({ t: 0, a: 0, l: 0 });
+    const lastAudit = db.prepare('SELECT action FROM audit_log ORDER BY id DESC LIMIT 1').get() as any;
+    expect(lastAudit.action).toBe('demo.reset');
+
+    // The pending escalation must not fire after the reset.
+    vi.advanceTimersByTime(30_000);
+    expect(emitted.some((e) => e.event === 'alert:escalated')).toBe(false);
+
+    // And a new trip starts cleanly (same driver, no "already active"),
+    // announced on the driver's personal channel so an open driver phone shows it.
+    const v = simulator.start({ routeId: 'blr-old-airport-road', speedKmh: 40 });
+    expect(v.signals.every((s) => s.state === 'PENDING')).toBe(true);
+    const started = emitted.filter((e) => e.event === 'trip:started').at(-1)!;
+    expect(started.rooms).toContain(`user:${userByEmail('driver.blr@demo.in').id}`);
+  });
+
   it('a driver cannot post to someone else\'s trip or start two trips', () => {
     const { trips, userByEmail } = stack;
     const blr = userByEmail('driver.blr@demo.in');

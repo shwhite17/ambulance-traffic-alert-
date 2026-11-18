@@ -10,10 +10,37 @@ import type { CatalogRoute, RouteCatalog } from './catalog.js';
 /** Transport-agnostic fan-out. Socket.IO implements it; tests use a recorder. */
 export interface Notifier {
   emit(rooms: string[], event: string, payload: unknown): void;
+  /**
+   * Demo reset: drop every client from trip channels (trip ids restart after a
+   * reset, so a stale subscription would leak another trip's updates) and tell
+   * every client to clear its state.
+   */
+  demoReset(): void;
+}
+
+export interface RecordedEvent {
+  event: string;
+  payload: unknown;
+  ts: number;
+}
+
+/** Events shown in the control-room feed; replayed after a page reload. */
+const FEED_EVENTS = new Set([
+  'trip:started', 'trip:ended', 'trip:offline', 'trip:online', 'trip:hospital',
+  'alert:new', 'alert:escalated', 'alert:ack', 'alert:passed',
+]);
+const RECENT_MAX = 50;
+
+/** Route geometry is large and already known to clients; don't keep it in history. */
+function stripGeometry(payload: unknown): unknown {
+  const p = payload as { route?: { coordinates?: unknown } };
+  return p && typeof p === 'object' && p.route?.coordinates ? { ...p, route: { ...p.route, coordinates: [] } } : payload;
 }
 
 export const rooms = {
   admin: 'admin',
+  /** Personal channel: every socket joins its own user's room. */
+  user: (id: number) => `user:${id}`,
   trip: (id: number) => `trip:${id}`,
   signal: (id: number) => `signal:${id}`,
   backup: (id: number) => `backup:${id}`,
@@ -125,6 +152,7 @@ const ARRIVED_WITHIN_M = 25;
 export class TripService {
   private readonly active = new Map<number, ActiveTrip>();
   private readonly alertIndex = new Map<number, { tripId: number; signalId: number }>();
+  private readonly recent: RecordedEvent[] = [];
   private readonly watchdog: NodeJS.Timeout;
 
   constructor(
@@ -143,6 +171,41 @@ export class TripService {
   dispose(): void {
     clearInterval(this.watchdog);
     for (const t of this.active.values()) for (const timer of t.escalationTimers.values()) clearTimeout(timer);
+  }
+
+  /** Recent control-room events, replayed to admin sockets on (re)connect. */
+  recentEvents(): RecordedEvent[] {
+    return [...this.recent];
+  }
+
+  /**
+   * Demo only: close every active trip without summaries, wipe trip history,
+   * and tell every connected screen to start clean. Users, junctions and
+   * officer assignments are kept.
+   */
+  resetAll(byUserId: number): void {
+    for (const trip of this.active.values()) {
+      for (const ev of trip.engine.close()) this.handleEngineEvent(trip, ev);
+      for (const t of trip.escalationTimers.values()) clearTimeout(t);
+    }
+    this.active.clear();
+    this.alertIndex.clear();
+    tx(this.db, () => {
+      this.db.exec('DELETE FROM location_samples; DELETE FROM alerts; DELETE FROM trip_signals; DELETE FROM trips;');
+      audit(this.db, { userId: byUserId, action: 'demo.reset' });
+    });
+    this.recent.length = 0; // closing alerts above recorded events; start truly empty
+    this.notifier.demoReset();
+    this.log.info({ byUserId }, 'demo reset');
+  }
+
+  /** Fan out, and remember events the control room's feed should be able to replay. */
+  private emit(targets: string[], event: string, payload: unknown): void {
+    this.notifier.emit(targets, event, payload);
+    if (!FEED_EVENTS.has(event)) return;
+    if (event === 'alert:passed' && !(payload as AlertView).alertId) return; // never-alerted pass: not feed-worthy
+    this.recent.push({ event, payload: stripGeometry(payload), ts: Date.now() });
+    if (this.recent.length > RECENT_MAX) this.recent.splice(0, this.recent.length - RECENT_MAX);
   }
 
   // ───────────────────────── trip lifecycle ─────────────────────────
@@ -210,7 +273,9 @@ export class TripService {
     };
     this.active.set(id, trip);
     const view = this.view(trip);
-    this.notifier.emit([rooms.admin, rooms.hospital(hospital.id)], 'trip:started', view);
+    // The driver's own channel too: a trip dispatched from the control room
+    // (simulator) must appear on a driver phone that is already open.
+    this.emit([rooms.admin, rooms.hospital(hospital.id), rooms.user(driver.id)], 'trip:started', view);
     this.log.info({ tripId: id, route: route.id, simulated: trip.simulated }, 'trip started');
     return view;
   }
@@ -224,7 +289,7 @@ export class TripService {
     trip.lastPingAt = now;
     if (trip.offline) {
       trip.offline = false;
-      this.notifier.emit([rooms.admin, rooms.trip(trip.id)], 'trip:online', { tripId: trip.id });
+      this.emit([rooms.admin, rooms.trip(trip.id)], 'trip:online', { tripId: trip.id });
     }
     if (!res.accepted) {
       this.log.debug({ tripId, reason: res.reason }, 'ping rejected');
@@ -249,17 +314,17 @@ export class TripService {
 
     if (!trip.arrived && trip.route.geometry.lengthM - res.progressM <= ARRIVED_WITHIN_M) {
       trip.arrived = true;
-      this.notifier.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:arrived', { tripId: trip.id });
+      this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:arrived', { tripId: trip.id });
     }
 
     const view = this.view(trip);
     // Route geometry is sent once with the trip; per-ping updates stay small.
     const lite = { ...view, route: { ...view.route, coordinates: [] } };
-    this.notifier.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'location:update', lite);
+    this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'location:update', lite);
     // Live countdown for officers whose junction currently has an alert.
     for (const s of view.signals) {
       if (!ACTIVE_ALERT_STATES.has(s.state)) continue;
-      this.notifier.emit([rooms.signal(s.signalId), rooms.backup(s.signalId)], 'alert:update', this.alertView(trip, s));
+      this.emit([rooms.signal(s.signalId), rooms.backup(s.signalId)], 'alert:update', this.alertView(trip, s));
     }
     return { accepted: true as const, progressM: res.progressM, offRoute: res.offRoute, lowConfidence: res.lowConfidence };
   }
@@ -295,7 +360,7 @@ export class TripService {
     });
     this.active.delete(trip.id);
     for (const s of trip.engine.statuses()) if (s.alertId) this.alertIndex.delete(s.alertId);
-    this.notifier.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:ended', { tripId: trip.id, summary });
+    this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:ended', { tripId: trip.id, summary });
     this.log.info({ tripId: trip.id, reason }, 'trip ended');
     return summary;
   }
@@ -320,7 +385,7 @@ export class TripService {
     }
     audit(this.db, { userId: user.id, action: `trip.hospital_${action}`, entity: 'trip', entityId: trip.id });
     const view = this.view(trip);
-    this.notifier.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:hospital', view);
+    this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:hospital', view);
     return view;
   }
 
@@ -436,7 +501,7 @@ export class TripService {
 
     const view = this.alertView(trip, this.withCoords(trip, s));
     const targets = [rooms.signal(s.signalId), rooms.backup(s.signalId), rooms.trip(trip.id), rooms.admin];
-    this.notifier.emit(targets, ev.type, view);
+    this.emit(targets, ev.type, view);
   }
 
   private escalate(tripId: number, signalId: number): void {
@@ -473,7 +538,7 @@ export class TripService {
     for (const t of this.active.values()) {
       if (!t.offline && now - t.lastPingAt > config.pipeline.offlineAfterMs) {
         t.offline = true;
-        this.notifier.emit([rooms.admin, rooms.trip(t.id), rooms.hospital(t.hospital.id)], 'trip:offline', {
+        this.emit([rooms.admin, rooms.trip(t.id), rooms.hospital(t.hospital.id)], 'trip:offline', {
           tripId: t.id,
           lastPosition: t.last?.raw ?? null,
           lastPingAt: t.lastPingAt,

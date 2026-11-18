@@ -80,6 +80,7 @@ export function OfficerDashboard({
       removeLater(a.signal.signalId);
     },
     'alert:closed': (a: AlertView) => drop(a.signal.signalId),
+    'demo:reset': () => setAlerts(new Map()),
   });
 
   useEffect(() => () => removeTimers.current.forEach((t) => window.clearTimeout(t)), []);

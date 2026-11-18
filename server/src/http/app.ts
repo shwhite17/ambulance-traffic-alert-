@@ -114,6 +114,12 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
     res.json({ token: signToken(user), role: user.role, user });
   });
 
+  api.post('/demo/reset', demoOnly, requireAuth('admin'), (req, res) => {
+    simulator.stopAll(); // first, so no tick races the reset
+    trips.resetAll(userOf(req).id);
+    res.status(204).end();
+  });
+
   // ── reference data ──
   api.get('/hospitals', requireAuth(), (_req, res) => {
     res.json(db.prepare('SELECT id, name, city, lat, lng FROM hospitals ORDER BY city').all());

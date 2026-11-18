@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, Ambulance, Bell, CheckCheck, Clock, FastForward, Gauge, History, Hospital, ListOrdered, OctagonAlert,
-  Pause, Play, Radar, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
+  Pause, Play, Radar, RotateCcw, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
 } from 'lucide-react';
 import { api, demoLogin, errorText } from '../lib/api';
 import { unlockAudio } from '../lib/alarm';
@@ -38,7 +38,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
   const [summary, setSummary] = useState<TripSummary | null>(null);
   const [officers, setOfficers] = useState<Map<number, Session>>(new Map());
   const [backup, setBackup] = useState<Session | null>(null);
-  const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s) });
+  const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s), onReset: () => setSummary(null) });
 
   useEffect(() => {
     api<RouteInfo[]>('/routes', { token: session.token }).then(setRoutes).catch((e) => setError(errorText(e)));
@@ -132,6 +132,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
               {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
               <span className="hidden md:inline">{soundOn ? 'Sound on' : 'Sound off'}</span>
             </Button>
+            <ResetDemoButton session={session} onError={setError} />
             <ConnectionDot connected={feed.connected} />
             <Link to={mode === 'demo' ? '/control' : '/demo'} className="hidden text-sm text-slate-400 hover:text-white lg:block">
               {mode === 'demo' ? 'Control room' : 'Demo view'}
@@ -214,6 +215,38 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
 }
 
 // ───────────────────────── pieces ─────────────────────────
+
+/** Two-step so it can't be hit by accident mid-pitch. Every screen resets via the server. */
+function ResetDemoButton({ session, onError }: { session: Session; onError: (e: string | null) => void }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const t = window.setTimeout(() => setArmed(false), 4_000);
+    return () => window.clearTimeout(t);
+  }, [armed]);
+
+  const click = async () => {
+    if (!armed) return setArmed(true);
+    setBusy(true);
+    onError(null);
+    try {
+      await api('/demo/reset', { method: 'POST', token: session.token });
+    } catch (e) {
+      onError(errorText(e));
+    } finally {
+      setBusy(false);
+      setArmed(false);
+    }
+  };
+
+  return (
+    <Button variant={armed ? 'danger' : 'ghost'} className="min-h-9 px-3 text-sm" onClick={click} disabled={busy} title="Stop simulations, close trips and clear history on every screen">
+      <RotateCcw size={15} className={busy ? 'animate-spin' : ''} />
+      <span className="hidden md:inline">{armed ? 'Click to confirm' : 'Reset demo'}</span>
+    </Button>
+  );
+}
 
 function KpiStrip({ trip, summary, activeTrips }: { trip?: TripView; summary: TripSummary | null; activeTrips: number }) {
   const sigs = trip?.signals ?? [];

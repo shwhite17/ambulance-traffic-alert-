@@ -23,6 +23,12 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
     emit(targets, event, payload) {
       io.to(targets).emit(event, payload);
     },
+    demoReset() {
+      for (const room of io.of('/').adapter.rooms.keys()) {
+        if (room.startsWith('trip:')) io.in(room).socketsLeave(room);
+      }
+      io.emit('demo:reset', { at: Date.now() });
+    },
   };
 
   function attach(trips: TripService) {
@@ -39,6 +45,7 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
 
     io.on('connection', (socket) => {
       const user = socket.data.user as AuthUser;
+      socket.join(rooms.user(user.id));
       if (user.role === 'admin') socket.join(rooms.admin);
       if (user.role === 'hospital' && user.hospitalId) socket.join(rooms.hospital(user.hospitalId));
       if (user.role === 'officer') {
@@ -52,6 +59,8 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
       socket.emit('snapshot', {
         trips: active,
         alerts: user.role === 'officer' ? trips.officerAlerts(user) : [],
+        // Lets the control-room feed survive a page reload.
+        events: user.role === 'admin' ? trips.recentEvents() : [],
       });
 
       // Drivers join a trip room right after creating a trip.

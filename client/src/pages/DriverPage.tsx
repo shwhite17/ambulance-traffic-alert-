@@ -19,7 +19,7 @@ export function DriverPage() {
 
 function Driver({ session, logout }: { session: Session; logout: () => void }) {
   const [summary, setSummary] = useState<TripSummary | null>(null);
-  const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s) });
+  const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s), onReset: () => setSummary(null) });
   const trip = [...feed.trips.values()][0] ?? null;
 
   // Join the trip room for a trip created after the socket connected.

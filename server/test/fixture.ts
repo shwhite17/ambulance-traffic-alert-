@@ -21,12 +21,13 @@ export function makeStack() {
   const log = pino({ level: 'silent' });
   const emitted: Emitted[] = [];
   const listeners: ((e: Emitted) => void)[] = [];
+  const record = (e: Emitted) => {
+    emitted.push(e);
+    for (const l of listeners) l(e);
+  };
   const notifier: Notifier = {
-    emit(rooms, event, payload) {
-      const e = { rooms, event, payload };
-      emitted.push(e);
-      for (const l of listeners) l(e);
-    },
+    emit: (rooms, event, payload) => record({ rooms, event, payload }),
+    demoReset: () => record({ rooms: ['*'], event: 'demo:reset', payload: {} }),
   };
   const trips = new TripService(db, catalog, notifier, log);
   const simulator = new Simulator(db, catalog, trips, notifier, log);

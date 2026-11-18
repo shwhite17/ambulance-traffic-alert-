@@ -116,9 +116,14 @@ export class Simulator {
     return [...this.runs.values()].map((r) => this.state(r));
   }
 
-  dispose(): void {
+  /** Stop every simulated run without ending its trip (the caller decides). */
+  stopAll(): void {
     for (const r of this.runs.values()) clearInterval(r.timer);
     this.runs.clear();
+  }
+
+  dispose(): void {
+    this.stopAll();
   }
 
   private state(run: SimRun) {
