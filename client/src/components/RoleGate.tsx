@@ -70,7 +70,7 @@ function LoginScreen({ role, onLogin }: { role: Role; onLogin: (s: Session) => v
         <ErrorBanner error={error} />
         {accounts.length > 0 && (
           <section className="panel p-2">
-            <h2 className="px-3 pt-2 pb-1 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Demo accounts · one tap</h2>
+            <h2 className="px-3 pt-2 pb-1 eyebrow text-slate-400 uppercase">Demo accounts · one tap</h2>
             <div className="max-h-72 overflow-y-auto">
               {accounts.map((a) => (
                 <button
@@ -96,7 +96,7 @@ function LoginScreen({ role, onLogin }: { role: Role; onLogin: (s: Session) => v
             void run(() => login(email, password));
           }}
         >
-          <h2 className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Sign in with email</h2>
+          <h2 className="eyebrow text-slate-400 uppercase">Sign in with email</h2>
           <label className="block">
             <span className="text-sm text-slate-400">Email</span>
             <input className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-blue-500" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />

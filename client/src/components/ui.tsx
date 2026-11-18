@@ -94,7 +94,7 @@ export function Kpi({ label, value, hint, icon: Icon, tone = 'default' }: { labe
         <Icon size={20} />
       </span>
       <div className="min-w-0">
-        <div className="tabular text-xl leading-tight font-bold text-white">{value}</div>
+        <div className="tabular text-xl leading-tight font-semibold text-white">{value}</div>
         <div className="truncate text-xs text-slate-400">
           {label}
           {hint && <span className="text-slate-500"> · {hint}</span>}
@@ -107,7 +107,7 @@ export function Kpi({ label, value, hint, icon: Icon, tone = 'default' }: { labe
 export function SectionTitle({ icon: Icon, children, right }: { icon: LucideIcon; children: ReactNode; right?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
-      <h3 className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+      <h3 className="flex items-center gap-2 eyebrow text-slate-400 uppercase">
         <Icon size={14} />
         {children}
       </h3>

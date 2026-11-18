@@ -69,7 +69,7 @@ export function Landing() {
             <span className="inline-flex items-center gap-2 rounded-full bg-emergency/10 px-3 py-1 text-xs font-semibold tracking-wide text-red-200 ring-1 ring-emergency/30">
               <span className="pulse-ring h-2 w-2 rounded-full bg-emergency text-emergency" /> Green corridors without smart signals
             </span>
-            <h1 className="text-5xl leading-[1.05] font-black tracking-tight sm:text-6xl">
+            <h1 className="text-5xl leading-[1.04] font-semibold tracking-[-0.04em] sm:text-7xl">
               {TAGLINE.split(' before ')[0]}
               <span className="block bg-gradient-to-r from-red-400 via-amber-300 to-emerald-300 bg-clip-text text-transparent">before the siren is heard.</span>
             </h1>
@@ -106,7 +106,7 @@ export function Landing() {
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-white/5 ring-1 ring-white/10">
                   <s.icon size={20} />
                 </span>
-                <span className="text-xs font-semibold tracking-[0.18em] text-slate-500 uppercase">Step {i + 1}</span>
+                <span className="eyebrow text-slate-500 uppercase">Step {i + 1}</span>
               </div>
               <h3 className="mt-4 text-xl font-bold">{s.title}</h3>
               <p className="mt-1 text-slate-400">{s.text}</p>
@@ -116,7 +116,7 @@ export function Landing() {
 
         {/* Roles */}
         <section className="pb-16">
-          <h2 className="mb-4 text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">Open an app</h2>
+          <h2 className="mb-4 eyebrow text-slate-400 uppercase">Open an app</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {ROLES.map((r) => (
               <Link key={r.to} to={r.to} className="panel group p-5 transition hover:-translate-y-0.5 hover:border-white/20 focus-visible:ring-4 focus-visible:ring-blue-500/50">
@@ -190,7 +190,7 @@ function HeroCorridor() {
                   values="#334155;#f5a524;#17c964;#3b82f6;#3b82f6"
                 />
               </circle>
-              <text x={x} y="170" textAnchor="middle" fill="#64748b" fontSize="11" fontFamily="Inter Variable, sans-serif">
+              <text x={x} y="170" textAnchor="middle" fill="#64748b" fontSize="11" fontFamily="Geist Mono Variable, monospace">
                 J{i + 1}
               </text>
             </g>

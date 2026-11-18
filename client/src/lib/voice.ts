@@ -37,6 +37,8 @@ interface Phrases {
   driverEscalated: (n: number) => string;
   driverAllPassed: string;
   driverArriving: string;
+  citizenWarn: (secs: number) => string;
+  citizenPassed: string;
 }
 
 export const PHRASES: Record<Lang, Phrases> = {
@@ -53,6 +55,8 @@ export const PHRASES: Record<Lang, Phrases> = {
     driverEscalated: (n) => `Junction ${n}: no response. Backup notified.`,
     driverAllPassed: 'All junctions passed.',
     driverArriving: 'Arriving at the hospital.',
+    citizenWarn: (s) => `Ambulance behind you, ${s} seconds away. Please move to the left.`,
+    citizenPassed: 'Thank you for clearing the way.',
   },
   hi: {
     voiceOn: 'आवाज़ अलर्ट चालू हैं।',
@@ -67,6 +71,8 @@ export const PHRASES: Record<Lang, Phrases> = {
     driverEscalated: (n) => `जंक्शन ${n}: कोई जवाब नहीं। बैकअप को सूचित किया गया।`,
     driverAllPassed: 'सभी जंक्शन पार हो गए।',
     driverArriving: 'अस्पताल पहुँच रहे हैं।',
+    citizenWarn: (s) => `आपके पीछे एम्बुलेंस है, ${s} सेकंड में पहुँचेगी। कृपया बाईं ओर हो जाएँ।`,
+    citizenPassed: 'रास्ता देने के लिए धन्यवाद।',
   },
   kn: {
     voiceOn: 'ಧ್ವನಿ ಎಚ್ಚರಿಕೆಗಳು ಆನ್ ಆಗಿವೆ.',
@@ -81,6 +87,8 @@ export const PHRASES: Record<Lang, Phrases> = {
     driverEscalated: (n) => `ಜಂಕ್ಷನ್ ${n}: ಪ್ರತಿಕ್ರಿಯೆ ಇಲ್ಲ. ಬ್ಯಾಕಪ್‌ಗೆ ತಿಳಿಸಲಾಗಿದೆ.`,
     driverAllPassed: 'ಎಲ್ಲಾ ಜಂಕ್ಷನ್‌ಗಳನ್ನು ದಾಟಲಾಗಿದೆ.',
     driverArriving: 'ಆಸ್ಪತ್ರೆಗೆ ತಲುಪುತ್ತಿದ್ದೇವೆ.',
+    citizenWarn: (s) => `ನಿಮ್ಮ ಹಿಂದೆ ಆಂಬ್ಯುಲೆನ್ಸ್ ಇದೆ, ${s} ಸೆಕೆಂಡುಗಳಲ್ಲಿ ತಲುಪುತ್ತದೆ. ದಯವಿಟ್ಟು ಎಡಕ್ಕೆ ಸರಿಯಿರಿ.`,
+    citizenPassed: 'ದಾರಿ ಬಿಟ್ಟುಕೊಟ್ಟಿದ್ದಕ್ಕೆ ಧನ್ಯವಾದಗಳು.',
   },
   mr: {
     voiceOn: 'आवाज सूचना सुरू आहेत.',
@@ -95,6 +103,8 @@ export const PHRASES: Record<Lang, Phrases> = {
     driverEscalated: (n) => `जंक्शन ${n}: प्रतिसाद नाही. बॅकअपला कळवले.`,
     driverAllPassed: 'सर्व जंक्शन पार झाले.',
     driverArriving: 'रुग्णालयात पोहोचत आहोत.',
+    citizenWarn: (s) => `तुमच्या मागे रुग्णवाहिका आहे, ${s} सेकंदात पोहोचेल. कृपया डावीकडे व्हा.`,
+    citizenPassed: 'रस्ता दिल्याबद्दल धन्यवाद.',
   },
 };
 

@@ -139,7 +139,7 @@ export function OfficerDashboard({
   const header = (
     <div className="flex items-center justify-between gap-2 px-5 pt-4">
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold tracking-[0.18em] uppercase opacity-60">{isBackupOnly ? 'Backup patrol' : 'Your junction'}</p>
+        <p className="eyebrow uppercase opacity-60">{isBackupOnly ? 'Backup patrol' : 'Your junction'}</p>
         <p className="truncate text-sm font-semibold">{junctionLabel}</p>
       </div>
       <span className="flex shrink-0 items-center gap-3">
@@ -159,7 +159,7 @@ export function OfficerDashboard({
       <div className={`${shell} grid-bg items-center justify-center gap-6 bg-ink p-6 text-center`}>
         <LogoMark size={56} />
         <div>
-          <p className="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">Traffic officer</p>
+          <p className="eyebrow text-slate-400 uppercase">Traffic officer</p>
           <p className="mt-1 text-xl font-bold">{junctionLabel}</p>
         </div>
         <button
@@ -174,7 +174,7 @@ export function OfficerDashboard({
           <Power size={26} /> Start duty
         </button>
         <div className="flex w-full max-w-sm flex-col items-center gap-2">
-          <p className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Voice alerts</p>
+          <p className="eyebrow text-slate-400 uppercase">Voice alerts</p>
           <VoicePicker className="items-center" />
         </div>
         <p className="max-w-sm text-sm text-slate-400">Turns on the alarm sound, voice and vibration, and keeps your screen awake.</p>
@@ -219,8 +219,8 @@ export function OfficerDashboard({
         {header}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <ShieldCheck size={64} strokeWidth={1.5} />
-          <p className="text-5xl leading-none font-black tracking-tight">CLEAR THE LANE</p>
-          <p className="tabular text-3xl font-bold">
+          <p className="text-5xl leading-none font-extrabold tracking-tight">CLEAR THE LANE</p>
+          <p className="tabular text-3xl font-semibold">
             {fmtDistance(s.distanceM)} · {s.etaS} s
           </p>
           <p className="opacity-90">Approaching from the {s.approachFrom}</p>
@@ -236,7 +236,7 @@ export function OfficerDashboard({
         {header}
         <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
           <CheckCheck size={64} strokeWidth={1.5} />
-          <p className="text-5xl font-black">PASSED</p>
+          <p className="text-5xl font-extrabold">PASSED</p>
           <p className="opacity-90">{s.acknowledgedAt ? 'Thank you. Junction cleared in time.' : 'Ambulance passed without acknowledgment.'}</p>
         </div>
       </div>
@@ -276,14 +276,16 @@ export function OfficerDashboard({
           </svg>
           <div className="absolute inset-0 grid place-items-center">
             <div>
-              <div className="tabular text-5xl leading-none font-black">{s.etaS ?? '—'}</div>
+              <div className="tabular text-5xl leading-none font-semibold">{s.etaS ?? '—'}</div>
               <div className="text-xs font-semibold tracking-widest uppercase opacity-80">seconds</div>
             </div>
           </div>
         </div>
         <div>
-          <p className="text-4xl font-black tracking-tight">AMBULANCE</p>
-          <p className="tabular text-2xl font-bold">{fmtDistance(s.distanceM)} away</p>
+          <p className="text-4xl font-extrabold tracking-tight">AMBULANCE</p>
+          <p className="text-2xl font-semibold">
+            <span className="tabular">{fmtDistance(s.distanceM)}</span> away
+          </p>
         </div>
         <div className="flex items-center gap-3 rounded-2xl bg-black/25 px-4 py-2">
           <ArrowDown size={28} style={{ transform: `rotate(${FROM_DEG[s.approachFrom ?? ''] ?? 0}deg)` }} />
@@ -301,7 +303,7 @@ export function OfficerDashboard({
         <button
           onClick={acknowledge}
           disabled={acking || !current.alertId}
-          className="min-h-20 w-full rounded-2xl bg-white text-2xl font-black tracking-wide text-emergency shadow-xl focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-60"
+          className="min-h-20 w-full rounded-2xl bg-white text-2xl font-bold tracking-wide text-emergency shadow-xl focus-visible:ring-4 focus-visible:ring-yellow-300 disabled:opacity-60"
         >
           {acking ? '…' : 'ACKNOWLEDGE'}
         </button>

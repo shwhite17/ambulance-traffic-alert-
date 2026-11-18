@@ -10,6 +10,7 @@ import { ControlPage } from './pages/ControlPage';
 import { DemoPage } from './pages/DemoPage';
 import { SummaryPage } from './pages/SummaryPage';
 import { JoinPage } from './pages/JoinPage';
+import { CitizenPage } from './pages/CitizenPage';
 
 // Installable app (PWA). Production only, so dev hot-reload isn't cached.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
@@ -28,6 +29,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/trips/:id" element={<SummaryPage />} />
         <Route path="/join/:token" element={<JoinPage />} />
+        <Route path="/car/:routeId" element={<CitizenPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

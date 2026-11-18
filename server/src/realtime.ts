@@ -2,8 +2,12 @@ import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import type { Logger } from 'pino';
 import { config } from './config.js';
-import { verifyToken, type AuthUser } from './auth.js';
+import { verifyCitizenToken, verifyToken, type AuthUser } from './auth.js';
 import { rooms, type Notifier, type TripService } from './services/tripService.js';
+import type { CitizenService } from './services/citizens.js';
+
+/** A citizen car is forgotten this long after its last phone disconnects (allows reloads). */
+const CITIZEN_GRACE_MS = 60_000;
 
 /**
  * Socket.IO gateway. Rooms are assigned server-side from the JWT, so a client
@@ -50,13 +54,19 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
   }
   const pushPresence = () => io.to(rooms.admin).emit('presence', presence());
 
-  function attach(trips: TripService) {
+  function attach(trips: TripService, citizens: CitizenService) {
     io.use((socket, next) => {
+      const token = socket.handshake.auth?.token;
+      if (typeof token !== 'string') return next(new Error('unauthenticated'));
       try {
-        const token = socket.handshake.auth?.token;
-        if (typeof token !== 'string') return next(new Error('unauthenticated'));
         socket.data.user = verifyToken(token);
         socket.data.preview = socket.handshake.auth?.preview === true;
+        return next();
+      } catch {
+        /* not a session token: maybe a citizen */
+      }
+      try {
+        socket.data.citizenId = verifyCitizenToken(token).citizenId;
         next();
       } catch {
         next(new Error('invalid_token'));
@@ -64,6 +74,20 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
     });
 
     io.on('connection', (socket) => {
+      // Citizen phones only ever get their own car's channel.
+      const citizenId = socket.data.citizenId as string | undefined;
+      if (citizenId) {
+        const room = rooms.citizen(citizenId);
+        socket.join(room);
+        socket.emit('citizen:snapshot', citizens.get(citizenId)); // null if the car was removed (e.g. demo reset)
+        socket.on('disconnect', () => {
+          setTimeout(() => {
+            if (!io.of('/').adapter.rooms.get(room)?.size) citizens.remove(citizenId);
+          }, CITIZEN_GRACE_MS).unref();
+        });
+        return;
+      }
+
       const user = socket.data.user as AuthUser;
       socket.join(rooms.user(user.id));
       if (user.role === 'admin') socket.join(rooms.admin);
@@ -82,6 +106,7 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
         // Lets the control-room feed survive a page reload.
         events: user.role === 'admin' ? trips.recentEvents() : [],
         presence: user.role === 'admin' ? presence() : {},
+        citizens: user.role === 'admin' ? citizens.list() : [],
       });
       if (user.role === 'officer') {
         pushPresence();

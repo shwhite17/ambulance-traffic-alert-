@@ -66,6 +66,45 @@ export interface TripView {
   hospitalConfirmedAt: number | null;
   hospitalReadyAt: number | null;
   patientNote: string | null;
+  brief: TripBrief | null;
+}
+
+/** AI pre-arrival brief (decision support). Mirrors server/src/services/briefAi.ts. */
+export interface TripBrief {
+  severity: 'critical' | 'serious' | 'stable';
+  category: 'cardiac' | 'stroke' | 'trauma' | 'respiratory' | 'obstetric' | 'burns' | 'poisoning' | 'other';
+  suspectedCondition: string;
+  patient: { ageYears: number | null; sex: 'male' | 'female' | 'unknown' };
+  chiefComplaint: string;
+  onset: string | null;
+  vitals: {
+    bloodPressure: string | null;
+    heartRate: number | null;
+    spo2: number | null;
+    respiratoryRate: number | null;
+    gcs: number | null;
+    bloodGlucose: number | null;
+  };
+  redFlags: string[];
+  prepChecklist: string[];
+  missingInfo: string[];
+  handoverSummary: string;
+  detectedLanguage: string;
+  transcript: string;
+  at: number;
+}
+
+export interface CitizenView {
+  id: string;
+  routeId: string;
+  lat: number;
+  lng: number;
+  label: string;
+  simulated: boolean;
+  state: 'idle' | 'warned' | 'cleared';
+  regNo: string | null;
+  distanceM: number | null;
+  etaS: number | null;
 }
 
 export interface AlertView {

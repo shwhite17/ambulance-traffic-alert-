@@ -27,3 +27,7 @@ services:
         value: data/app.db
       - key: LOG_LEVEL
         value: info
+      # AI Paramedic Copilot. Secret: set it in the Render dashboard, never in git.
+      # Without it the app runs normally and only AI briefs are disabled.
+      - key: ANTHROPIC_API_KEY
+        sync: false

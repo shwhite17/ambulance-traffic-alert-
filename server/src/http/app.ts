@@ -8,16 +8,20 @@ import { existsSync } from 'node:fs';
 import { z, ZodError } from 'zod';
 import { config } from '../config.js';
 import { audit, type Db } from '../db.js';
-import { HttpError, requireAuth, signJoinToken, signToken, userOf, verifyJoinToken, type AuthUser } from '../auth.js';
+import { HttpError, requireAuth, signCitizenToken, signJoinToken, signToken, userOf, verifyJoinToken, type AuthUser } from '../auth.js';
 import type { RouteCatalog } from '../services/catalog.js';
 import type { TripService } from '../services/tripService.js';
 import type { Simulator } from '../services/simulator.js';
+import { MAX_TRANSCRIPT_CHARS, type BriefGenerator } from '../services/briefAi.js';
+import type { CitizenService } from '../services/citizens.js';
 
 interface Deps {
   db: Db;
   catalog: RouteCatalog;
   trips: TripService;
   simulator: Simulator;
+  briefAi: BriefGenerator;
+  citizens: CitizenService;
   log: Logger;
   clientDist?: string;
 }
@@ -64,7 +68,7 @@ interface UserRow {
 }
 const toAuthUser = (u: UserRow): AuthUser => ({ id: u.id, role: u.role, name: u.name, city: u.city, hospitalId: u.hospital_id });
 
-export function createApp({ db, catalog, trips, simulator, log, clientDist }: Deps) {
+export function createApp({ db, catalog, trips, simulator, briefAi, citizens, log, clientDist }: Deps) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
@@ -80,7 +84,7 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
 
   const startedAt = Date.now();
   app.get('/health', (_req, res) => {
-    res.json({ ok: true, uptimeS: Math.round((Date.now() - startedAt) / 1000), activeTrips: trips.activeCount, demoMode: config.demoMode });
+    res.json({ ok: true, uptimeS: Math.round((Date.now() - startedAt) / 1000), activeTrips: trips.activeCount, demoMode: config.demoMode, aiBriefs: briefAi.configured });
   });
 
   const api = express.Router();
@@ -147,6 +151,7 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
   api.post('/demo/reset', demoOnly, requireAuth('admin'), (req, res) => {
     simulator.stopAll(); // first, so no tick races the reset
     trips.resetAll(userOf(req).id);
+    citizens.reset();
     res.status(204).end();
   });
 
@@ -217,6 +222,34 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
   api.post('/trips/:id/hospital', requireAuth('hospital', 'admin'), (req, res) => {
     const { action, note } = HospitalBody.parse(req.body);
     res.json(trips.hospitalAction(idParam(req), userOf(req), action, note));
+  });
+
+  // ── AI paramedic brief (decision support, off the alert path) ──
+  const briefLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: 6, // each call costs AI credits; a crew briefs a few times per trip at most
+    keyGenerator: (req) => `u${req.user?.id ?? 'anon'}`,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+  });
+  api.post('/trips/:id/brief', requireAuth('driver', 'admin'), briefLimiter, async (req, res) => {
+    const { transcript } = z.object({ transcript: z.string().trim().min(10).max(MAX_TRANSCRIPT_CHARS) }).parse(req.body);
+    const tripId = idParam(req);
+    const user = userOf(req);
+    trips.assertCanBrief(tripId, user); // before spending on the model
+    const brief = await briefAi.generate(transcript);
+    res.json(trips.setBrief(tripId, user, brief, transcript));
+  });
+
+  // ── Citizen Corridor (demo: opt-in link, anonymous) ──
+  api.post('/citizen/join', demoOnly, loginLimiter, (req, res) => {
+    const { routeId } = z.object({ routeId: z.string().min(1).max(64) }).parse(req.body);
+    const citizen = citizens.join(routeId);
+    res.status(201).json({ token: signCitizenToken(citizen.id), citizen });
+  });
+  api.post('/demo/citizens', demoOnly, requireAuth('admin'), (req, res) => {
+    const { routeId, count } = z.object({ routeId: z.string().min(1), count: z.number().int().min(1).max(60) }).parse(req.body);
+    res.json({ added: citizens.addSimulated(routeId, count) });
   });
 
   // ── officer ──

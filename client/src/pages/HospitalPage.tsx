@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Ambulance, BedDouble, CheckCircle2, ClipboardCheck, LogOut, NotebookPen, WifiOff } from 'lucide-react';
 import { RoleGate } from '../components/RoleGate';
+import { BriefCard } from '../components/BriefCard';
 import { Button, ConnectionDot, ErrorBanner, SectionTitle, SimBadge, TopBar } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { fmtDistance, fmtDuration, fmtTime, STATE_STYLE } from '../lib/format';
@@ -32,7 +33,7 @@ function Hospital({ session, logout }: { session: Session; logout: () => void })
       <main className="mx-auto max-w-6xl space-y-5 p-4">
         <div className="flex items-end justify-between gap-4 pt-2">
           <div>
-            <p className="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">Emergency department</p>
+            <p className="eyebrow text-slate-400 uppercase">Emergency department</p>
             <h2 className="text-2xl font-bold">Incoming ambulances</h2>
           </div>
           <span className="rounded-full bg-white/5 px-3 py-1 text-sm ring-1 ring-white/10">
@@ -109,8 +110,8 @@ function IncomingCard({ trip, session }: { trip: TripView; session: Session }) {
       <div className="p-4">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">Arriving in</p>
-            <p className="tabular text-5xl leading-none font-black text-white">{trip.arrived ? 'Arrived' : fmtDuration(trip.etaToHospitalS)}</p>
+            <p className="eyebrow text-slate-400 uppercase">Arriving in</p>
+            <p className="tabular text-5xl leading-none font-semibold text-white">{trip.arrived ? 'Arrived' : fmtDuration(trip.etaToHospitalS)}</p>
           </div>
           <p className="tabular text-right text-sm text-slate-400">{fmtDistance(trip.remainingM)} away</p>
         </div>
@@ -131,6 +132,15 @@ function IncomingCard({ trip, session }: { trip: TripView; session: Session }) {
           {trip.nextSignal && ` · next: ${trip.nextSignal.name}`}
         </p>
 
+        {trip.brief ? (
+          <div className="mt-4">
+            <BriefCard brief={trip.brief} />
+          </div>
+        ) : (
+          <p className="mt-4 rounded-xl bg-white/[0.03] p-3 text-xs text-slate-500 ring-1 ring-white/5">
+            Waiting for the crew's AI pre-arrival brief (they speak, you get a structured triage card here).
+          </p>
+        )}
         <ErrorBanner error={error} />
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button variant={trip.hospitalConfirmedAt ? 'ghost' : 'primary'} disabled={!!trip.hospitalConfirmedAt} onClick={() => act('confirm')}>

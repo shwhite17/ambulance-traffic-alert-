@@ -15,6 +15,7 @@ export interface AuthUser {
 // never be used as a session token, and vice versa.
 const SESSION_AUD = 'session';
 const JOIN_AUD = 'officer-join';
+const CITIZEN_AUD = 'citizen';
 
 export function signToken(u: AuthUser): string {
   return jwt.sign({ role: u.role, name: u.name, city: u.city, hospitalId: u.hospitalId }, config.jwtSecret, {
@@ -32,6 +33,17 @@ export function verifyToken(token: string): AuthUser {
 /** Short-lived link token that can only sign in as one junction's officer (demo QR). */
 export function signJoinToken(signalId: number, ttl: jwt.SignOptions['expiresIn'] = '2h'): string {
   return jwt.sign({ sig: signalId }, config.jwtSecret, { audience: JOIN_AUD, expiresIn: ttl });
+}
+
+/** Anonymous Citizen Corridor participant: only lets a socket receive its own car's alerts. */
+export function signCitizenToken(citizenId: string): string {
+  return jwt.sign({ cid: citizenId }, config.jwtSecret, { audience: CITIZEN_AUD, expiresIn: '6h' });
+}
+
+export function verifyCitizenToken(token: string): { citizenId: string } {
+  const p = jwt.verify(token, config.jwtSecret, { audience: CITIZEN_AUD }) as jwt.JwtPayload;
+  if (typeof p.cid !== 'string') throw new Error('invalid_citizen_token');
+  return { citizenId: p.cid };
 }
 
 export function verifyJoinToken(token: string): { signalId: number } {

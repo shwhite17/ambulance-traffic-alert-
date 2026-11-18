@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
     "@turf/along": "^7.4.0",
     "@turf/bearing": "^7.4.0",
     "@turf/distance": "^7.4.0",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Check, CheckCheck, CircleDot, Clock, Gauge, Hospital, LocateFixed, LogOut, MapPin, OctagonAlert, Siren } from 'lucide-react';
+import { Bell, Check, CheckCheck, Sparkles, X, CircleDot, Clock, Gauge, Hospital, LocateFixed, LogOut, MapPin, OctagonAlert, Siren } from 'lucide-react';
 import { MapView, alertRadiusM } from '../components/MapView';
 import { RoleGate } from '../components/RoleGate';
 import { TripSummaryView } from '../components/TripSummaryView';
@@ -12,6 +12,7 @@ import { useTripsFeed } from '../lib/useTripsFeed';
 import { useVoicePrefs } from '../lib/voice';
 import { useDriverVoice } from '../lib/useVoiceAlerts';
 import { VoicePicker } from '../components/VoicePicker';
+import { BriefComposer } from '../components/BriefComposer';
 import type { Session, TripSummary, TripView } from '../lib/types';
 
 const EMERGENCY_TYPES = ['Cardiac', 'Trauma / accident', 'Stroke', 'Maternity', 'Respiratory', 'Other'];
@@ -100,7 +101,7 @@ function StartTrip({ session, onStarted }: { session: Session; onStarted: (t: Tr
     <main className="grid-bg flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-md space-y-5 p-4 pb-10">
         <div className="pt-2">
-          <p className="text-xs font-semibold tracking-[0.18em] text-slate-400 uppercase">New emergency</p>
+          <p className="eyebrow text-slate-400 uppercase">New emergency</p>
           <h2 className="text-2xl font-bold">Where are you heading?</h2>
         </div>
         <ErrorBanner error={error} />
@@ -143,7 +144,7 @@ function StartTrip({ session, onStarted }: { session: Session; onStarted: (t: Tr
           ))}
         </div>
         <fieldset>
-          <legend className="mb-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Emergency type</legend>
+          <legend className="mb-2 eyebrow text-slate-400 uppercase">Emergency type</legend>
           <div className="grid grid-cols-2 gap-2">
             {EMERGENCY_TYPES.map((t) => (
               <button
@@ -161,7 +162,7 @@ function StartTrip({ session, onStarted }: { session: Session; onStarted: (t: Tr
         <button
           onClick={start}
           disabled={busy || !hospitalId}
-          className="flex min-h-20 w-full items-center justify-center gap-3 rounded-2xl bg-emergency text-xl font-black tracking-wide text-white shadow-[0_16px_50px_-12px_rgb(229_56_59/0.8)] focus-visible:ring-4 focus-visible:ring-red-300 disabled:opacity-60"
+          className="flex min-h-20 w-full items-center justify-center gap-3 rounded-2xl bg-emergency text-xl font-bold tracking-wide text-white shadow-[0_16px_50px_-12px_rgb(229_56_59/0.8)] focus-visible:ring-4 focus-visible:ring-red-300 disabled:opacity-60"
         >
           <Siren size={26} /> {busy ? 'Starting…' : 'START EMERGENCY TRIP'}
         </button>
@@ -185,6 +186,7 @@ function LiveTrip({ session, trip, connected, onEnded }: { session: Session; tri
   useDriverVoice(trip, voice.on);
   const [error, setError] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const next = trip.nextSignal;
   const pos = trip.position;
   const nextStatus = next ? NEXT_STATUS[next.state] : null;
@@ -216,8 +218,8 @@ function LiveTrip({ session, trip, connected, onEnded }: { session: Session; tri
             {next && nextStatus ? (
               <div className="flex items-center gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">Next junction</p>
-                  <p className="tabular text-3xl leading-tight font-black">{fmtDistance(next.distanceM)}</p>
+                  <p className="eyebrow text-slate-400 uppercase">Next junction</p>
+                  <p className="tabular text-3xl leading-tight font-semibold">{fmtDistance(next.distanceM)}</p>
                   <p className="truncate text-sm text-slate-300">{next.name}</p>
                 </div>
                 <div className={`flex flex-col items-center gap-1 text-center text-xs font-semibold ${nextStatus.cls}`}>
@@ -259,6 +261,9 @@ function LiveTrip({ session, trip, connected, onEnded }: { session: Session; tri
           </p>
           <VoicePicker compact />
         </div>
+        <Button variant="ghost" className="w-full text-violet-200 ring-violet-400/40" onClick={() => setBriefOpen(true)}>
+          <Sparkles size={16} /> {trip.brief ? 'Update hospital brief' : 'Brief the hospital (AI)'}
+        </Button>
         {confirmEnd ? (
           <div className="flex gap-2">
             <Button variant="danger" className="flex-1" onClick={end}>
@@ -274,7 +279,23 @@ function LiveTrip({ session, trip, connected, onEnded }: { session: Session; tri
           </Button>
         )}
       </div>
+      {briefOpen && <BriefSheet session={session} trip={trip} onClose={() => setBriefOpen(false)} />}
     </main>
+  );
+}
+
+function BriefSheet({ session, trip, onClose }: { session: Session; trip: TripView; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-end bg-black/70 backdrop-blur-sm sm:items-center sm:justify-center" role="dialog" aria-modal="true" aria-label="Brief the hospital">
+      <div className="panel max-h-[92vh] w-full overflow-y-auto rounded-b-none p-5 sm:max-w-xl sm:rounded-2xl">
+        <div className="mb-1 flex justify-end">
+          <Button variant="ghost" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </Button>
+        </div>
+        <BriefComposer session={session} trip={trip} />
+      </div>
+    </div>
   );
 }
 
@@ -293,7 +314,7 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string;
   return (
     <div className="rounded-xl bg-white/5 p-3 ring-1 ring-white/10">
       <Icon size={14} className="mx-auto mb-1 text-slate-500" />
-      <div className="tabular text-lg leading-none font-bold">{value}</div>
+      <div className="tabular text-lg leading-none font-semibold">{value}</div>
       <div className="mt-1 text-[10px] tracking-wide text-slate-500 uppercase">{label}</div>
     </div>
   );

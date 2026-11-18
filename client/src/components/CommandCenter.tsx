@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity, Ambulance, Bell, CheckCheck, Clock, FastForward, Gauge, History, Hospital, ListOrdered, OctagonAlert,
+  Activity, Ambulance, Bell, Car, Sparkles, CheckCheck, Clock, FastForward, Gauge, History, Hospital, ListOrdered, OctagonAlert,
   Pause, Play, QrCode, Radar, RotateCcw, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
 } from 'lucide-react';
 import { JudgeMode } from './JudgeMode';
 import { VoicePicker } from './VoicePicker';
+import { BriefComposer } from './BriefComposer';
 import { api, demoLogin, errorText } from '../lib/api';
 import { unlockAudio } from '../lib/alarm';
 import { fmtDistance, fmtDuration, fmtTime, STATE_STYLE } from '../lib/format';
 import { useTripsFeed, type FeedEvent } from '../lib/useTripsFeed';
-import type { RouteInfo, Session, SignalView, TripSummary, TripView } from '../lib/types';
+import type { CitizenView, RouteInfo, Session, SignalView, TripSummary, TripView } from '../lib/types';
 import { MapView, alertRadiusM } from './MapView';
 import { OfficerDashboard } from './OfficerDashboard';
 import { TripSummaryView } from './TripSummaryView';
@@ -41,6 +42,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
   const [officers, setOfficers] = useState<Map<number, Session>>(new Map());
   const [backup, setBackup] = useState<Session | null>(null);
   const [judgeOpen, setJudgeOpen] = useState(false);
+  const [briefOpen, setBriefOpen] = useState(false);
   const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s), onReset: () => setSummary(null) });
 
   useEffect(() => {
@@ -74,6 +76,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
   }, [mode, route?.id]);
 
   const statuses = useMemo(() => new Map(trip?.signals.map((s) => [s.signalId, s])), [trip]);
+  const cars = useMemo(() => (route ? feed.citizens.filter((c) => c.routeId === route.id) : []), [feed.citizens, route]);
 
   // The phone shows whichever junction matters most right now.
   const focusSignalId = useMemo(() => {
@@ -157,7 +160,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
         <ErrorBanner error={error} />
-        {route && <KpiStrip trip={trip} summary={summary} activeTrips={feed.trips.size} />}
+        {route && <KpiStrip trip={trip} summary={summary} activeTrips={feed.trips.size} cars={cars} />}
 
         {route && (
           <div className={`grid min-h-0 flex-1 gap-3 ${mode === 'demo' ? 'xl:grid-cols-[minmax(0,1fr)_340px_320px]' : 'lg:grid-cols-[minmax(0,1fr)_380px]'}`}>
@@ -169,6 +172,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
                   fitKey={route.id}
                   signals={route.signals.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng, label: s.name, order: s.order, state: statuses.get(s.id)?.state ?? 'PENDING' }))}
                   hospital={trip ? { lat: trip.hospital.lat, lng: trip.hospital.lng, label: trip.hospital.name } : undefined}
+                  cars={cars}
                   progressM={trip?.position?.progressM ?? null}
                   speedKmh={trip?.position?.speedKmh ?? 0}
                   ambulanceLabel={trip?.ambulance.regNo}
@@ -176,7 +180,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
                 <MapHud trip={trip} route={route} />
                 <Legend />
               </div>
-              <SimToolbar session={session} route={route} trip={trip} sim={trip && feed.simState.get(trip.id)} onError={setError} />
+              <SimToolbar session={session} route={route} trip={trip} sim={trip && feed.simState.get(trip.id)} onError={setError} onBrief={() => setBriefOpen(true)} />
             </div>
 
             {/* Corridor + events */}
@@ -206,7 +210,20 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
         )}
       </div>
 
-      {judgeOpen && route && <JudgeMode session={session} route={route} presence={feed.presence} onClose={() => setJudgeOpen(false)} />}
+      {judgeOpen && route && <JudgeMode session={session} route={route} presence={feed.presence} cars={cars} onClose={() => setJudgeOpen(false)} />}
+
+      {briefOpen && trip && (
+        <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Paramedic brief">
+          <div className="panel max-h-[90vh] w-full max-w-2xl overflow-y-auto p-5">
+            <div className="mb-2 flex justify-end">
+              <Button variant="ghost" onClick={() => setBriefOpen(false)} aria-label="Close">
+                <X size={18} />
+              </Button>
+            </div>
+            <BriefComposer session={session} trip={trip} onSent={feed.mergeTrip} />
+          </div>
+        </div>
+      )}
 
       {summary && !trip && (
         <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Trip summary">
@@ -259,7 +276,7 @@ function ResetDemoButton({ session, onError }: { session: Session; onError: (e: 
   );
 }
 
-function KpiStrip({ trip, summary, activeTrips }: { trip?: TripView; summary: TripSummary | null; activeTrips: number }) {
+function KpiStrip({ trip, summary, activeTrips, cars }: { trip?: TripView; summary: TripSummary | null; activeTrips: number; cars: CitizenView[] }) {
   const sigs = trip?.signals ?? [];
   const acked = sigs.filter((s) => s.acknowledgedAt && s.alertedAt);
   const avgResp = trip
@@ -274,12 +291,13 @@ function KpiStrip({ trip, summary, activeTrips }: { trip?: TripView; summary: Tr
   const lead = alerted.length ? Math.round(alerted.reduce((a, s) => a + (s.alertEtaS ?? 0), 0) / alerted.length) : null;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
       <Kpi icon={Ambulance} label="Active emergencies" value={activeTrips} tone={activeTrips ? 'danger' : 'default'} />
       <Kpi icon={ShieldCheck} label="Junctions cleared" value={`${cleared}/${total || '—'}`} tone="ok" />
       <Kpi icon={Timer} label="Avg officer response" value={avgResp === null ? '—' : `${avgResp.toFixed(1)} s`} />
       <Kpi icon={Radar} label="Avg warning given" value={lead === null ? '—' : `${lead} s`} hint="before arrival" tone="warn" />
       <Kpi icon={Siren} label="Escalations" value={escalations} tone={escalations ? 'danger' : 'default'} />
+      <Kpi icon={Car} label="Cars cleared" value={cars.length ? `${cars.filter((c) => c.state === 'cleared').length}/${cars.length}` : '—'} hint={cars.some((c) => c.state === 'warned') ? `${cars.filter((c) => c.state === 'warned').length} moving aside` : 'citizen corridor'} tone="ok" />
     </div>
   );
 }
@@ -322,12 +340,20 @@ function MapHud({ trip, route }: { trip?: TripView; route: RouteInfo }) {
       <div className="border-t border-line bg-warn/5 px-4 py-2.5">
         <p className="flex items-center justify-between text-xs">
           <span className="font-semibold text-warn">Alert zone ahead</span>
-          <span className="tabular font-bold text-white">{fmtDistance(radius)}</span>
+          <span className="tabular font-semibold text-white">{fmtDistance(radius)}</span>
         </p>
         <p className="mt-0.5 text-[11px] text-slate-400">
           {rule === 'eta' ? `ETA rule: anything within ${60} s at ${speed} km/h` : `Distance rule: within 500 m (slow traffic)`}
         </p>
       </div>
+      {trip.brief && (
+        <div className="flex items-center gap-2 border-t border-line bg-violet-500/10 px-4 py-2 text-xs">
+          <Sparkles size={14} className="shrink-0 text-violet-300" />
+          <span className="truncate text-violet-100">
+            <b>{trip.brief.severity.toUpperCase()}</b> · {trip.brief.suspectedCondition}
+          </span>
+        </div>
+      )}
       <div className="flex items-center gap-2 border-t border-line px-4 py-2 text-xs text-slate-400">
         <Hospital size={14} className="text-info" />
         <span className="truncate">{trip.hospital.name}</span>
@@ -341,7 +367,7 @@ function HudStat({ icon: Icon, value, unit }: { icon: typeof Gauge; value: strin
   return (
     <div className="px-2">
       <Icon size={14} className="mx-auto mb-1 text-slate-500" />
-      <div className="tabular text-lg leading-none font-bold text-white">{value}</div>
+      <div className="tabular text-lg leading-none font-semibold text-white">{value}</div>
       <div className="mt-1 text-[10px] tracking-wide text-slate-500 uppercase">{unit}</div>
     </div>
   );
@@ -421,8 +447,8 @@ function Corridor({
                   <StateBadge state={state} />
                 </div>
                 {s && s.distanceM !== null && state !== 'PENDING' && (
-                  <p className="tabular mt-1 text-xs text-slate-300">
-                    {fmtDistance(s.distanceM)} · {s.etaS} s · from the {s.approachFrom}
+                  <p className="mt-1 text-xs text-slate-300">
+                    <span className="tabular">{fmtDistance(s.distanceM)} · {s.etaS} s</span> · from the {s.approachFrom}
                   </p>
                 )}
                 {state === 'PASSED' && s?.acknowledgedAt && s.alertedAt && (
@@ -460,6 +486,7 @@ const EVENT_STYLE: Record<FeedEvent['kind'], { icon: typeof Bell; color: string 
   offline: { icon: WifiOff, color: '#e5383b' },
   online: { icon: Activity, color: '#17c964' },
   hospital: { icon: Hospital, color: '#a78bfa' },
+  brief: { icon: Sparkles, color: '#c4b5fd' },
 };
 
 function EventTimeline({ events }: { events: FeedEvent[] }) {
@@ -491,7 +518,7 @@ function EventTimeline({ events }: { events: FeedEvent[] }) {
 
 const SPEEDS = [20, 40, 60, 90];
 
-function SimToolbar({ session, route, trip, sim, onError }: { session: Session; route: RouteInfo; trip?: TripView; sim?: { speedKmh: number; paused: boolean }; onError: (e: string | null) => void }) {
+function SimToolbar({ session, route, trip, sim, onError, onBrief }: { session: Session; route: RouteInfo; trip?: TripView; sim?: { speedKmh: number; paused: boolean }; onError: (e: string | null) => void; onBrief: () => void }) {
   const [speed, setSpeed] = useState(40);
   const [nearFirst, setNearFirst] = useState(true);
   const call = async (path: string, body: unknown) => {
@@ -530,13 +557,16 @@ function SimToolbar({ session, route, trip, sim, onError }: { session: Session; 
 
   return (
     <div className="panel flex flex-wrap items-center gap-3 px-4 py-3">
-      <span className="flex items-center gap-2 text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">
+      <span className="flex items-center gap-2 eyebrow text-slate-400 uppercase">
         <Play size={14} /> Simulator
       </span>
       {trip ? (
         <>
           {speedPicker((v) => call(`/simulator/${trip.id}/control`, { speedKmh: v }))}
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="ghost" className="min-h-9 text-sm text-violet-200 ring-violet-400/40" onClick={onBrief}>
+              <Sparkles size={15} /> Paramedic brief
+            </Button>
             <Button variant="ghost" className="min-h-9 text-sm" onClick={() => call(`/simulator/${trip.id}/control`, { paused: !sim?.paused })}>
               {sim?.paused ? <Play size={15} /> : <Pause size={15} />} {sim?.paused ? 'Resume' : 'Pause'}
             </Button>

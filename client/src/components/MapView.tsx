@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { MapContainer, Marker, Polyline, TileLayer, Tooltip, ZoomControl, useMap } from 'react-leaflet';
+import { CircleMarker, MapContainer, Marker, Polyline, TileLayer, Tooltip, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { STATE_STYLE } from '../lib/format';
 import { buildLine, headingAt, pointAt, slice, type RouteLine } from '../lib/geo';
 import { ALERT_DISTANCE_M, ALERT_ETA_S } from '../lib/brand';
+
+export interface MapCar {
+  id: string;
+  lat: number;
+  lng: number;
+  state: 'idle' | 'warned' | 'cleared';
+  simulated: boolean;
+}
+const CAR_COLOR = { idle: '#e2e8f0', warned: '#f5a524', cleared: '#17c964' } as const;
 
 export interface MapSignal {
   id: number;
@@ -119,6 +128,7 @@ export function MapView({
   fitKey,
   signals = [],
   hospital,
+  cars = [],
   progressM = null,
   speedKmh = 0,
   showZone = true,
@@ -131,6 +141,8 @@ export function MapView({
   fitKey: string;
   signals?: MapSignal[];
   hospital?: { lat: number; lng: number; label: string };
+  /** Citizen Corridor cars along the route. */
+  cars?: MapCar[];
   progressM?: number | null;
   speedKmh?: number;
   showZone?: boolean;
@@ -152,6 +164,22 @@ export function MapView({
       {/* Route glow: wide soft line under a crisp core. */}
       <Polyline positions={positions} pathOptions={{ color: '#3b82f6', weight: 16, opacity: 0.16, interactive: false }} />
       <Polyline positions={positions} pathOptions={{ color: '#60a5fa', weight: 5, opacity: 0.95, interactive: false }} />
+      {cars.map((c) => (
+        <CircleMarker
+          key={c.id}
+          center={[c.lat, c.lng]}
+          radius={c.state === 'warned' ? 7 : 5}
+          pathOptions={{
+            color: '#0b1120',
+            weight: 1.5,
+            fillColor: CAR_COLOR[c.state],
+            fillOpacity: c.simulated ? 0.75 : 1,
+            className: c.state === 'warned' ? 'car-warned' : undefined,
+          }}
+        >
+          <Tooltip direction="top">{c.simulated ? 'Simulated car' : 'Citizen phone'} · {c.state === 'warned' ? 'moving aside' : c.state === 'cleared' ? 'cleared' : 'driving'}</Tooltip>
+        </CircleMarker>
+      ))}
       {progressM !== null && line.length > 0 && (
         <LiveLayer line={line} progressM={progressM} speedKmh={speedKmh} showZone={showZone} follow={follow} label={ambulanceLabel} />
       )}

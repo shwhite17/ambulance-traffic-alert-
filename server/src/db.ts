@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS trips (
   hospital_confirmed_at INTEGER,
   hospital_ready_at     INTEGER,
   patient_note          TEXT,
+  brief_json            TEXT,
   summary_json          TEXT
 );
 CREATE INDEX IF NOT EXISTS trips_status ON trips(status);
@@ -116,7 +117,14 @@ export function openDb(path: string): Db {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** Additive column migrations for databases created by earlier versions. */
+function migrate(db: Db): void {
+  const cols = (db.prepare('PRAGMA table_info(trips)').all() as { name: string }[]).map((c) => c.name);
+  if (!cols.includes('brief_json')) db.exec('ALTER TABLE trips ADD COLUMN brief_json TEXT');
 }
 
 export function audit(

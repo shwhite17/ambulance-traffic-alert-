@@ -6,6 +6,7 @@ import { LocationPipeline, type PipelineResult } from '../domain/pipeline.js';
 import type { LngLat, LocationPing, TripSignalStatus } from '../domain/types.js';
 import { HttpError, type AuthUser } from '../auth.js';
 import type { CatalogRoute, RouteCatalog } from './catalog.js';
+import type { PatientBrief } from './briefAi.js';
 
 /** Transport-agnostic fan-out. Socket.IO implements it; tests use a recorder. */
 export interface Notifier {
@@ -18,6 +19,22 @@ export interface Notifier {
   demoReset(): void;
 }
 
+/** The AI pre-arrival brief as stored on a trip: the model's output plus what was said. */
+export type TripBrief = PatientBrief & { transcript: string; at: number };
+
+export interface TripProgress {
+  tripId: number;
+  routeId: string;
+  regNo: string;
+  progressM: number;
+  etaSpeedMps: number;
+}
+export interface TripObserver {
+  started?(t: { tripId: number; routeId: string }): void;
+  progress?(p: TripProgress): void;
+  ended?(t: { tripId: number; routeId: string }): void;
+}
+
 export interface RecordedEvent {
   event: string;
   payload: unknown;
@@ -26,7 +43,7 @@ export interface RecordedEvent {
 
 /** Events shown in the control-room feed; replayed after a page reload. */
 const FEED_EVENTS = new Set([
-  'trip:started', 'trip:ended', 'trip:offline', 'trip:online', 'trip:hospital',
+  'trip:started', 'trip:ended', 'trip:offline', 'trip:online', 'trip:hospital', 'trip:brief',
   'alert:new', 'alert:escalated', 'alert:ack', 'alert:passed',
 ]);
 const RECENT_MAX = 50;
@@ -41,6 +58,8 @@ export const rooms = {
   admin: 'admin',
   /** Personal channel: every socket joins its own user's room. */
   user: (id: number) => `user:${id}`,
+  /** A Citizen Corridor participant (anonymous car). */
+  citizen: (id: string) => `citizen:${id}`,
   trip: (id: number) => `trip:${id}`,
   signal: (id: number) => `signal:${id}`,
   backup: (id: number) => `backup:${id}`,
@@ -74,6 +93,7 @@ interface ActiveTrip {
   hospitalConfirmedAt: number | null;
   hospitalReadyAt: number | null;
   patientNote: string | null;
+  brief: TripBrief | null;
 }
 
 export type SignalView = TripSignalStatus & LngLat;
@@ -106,6 +126,7 @@ export interface TripView {
   hospitalConfirmedAt: number | null;
   hospitalReadyAt: number | null;
   patientNote: string | null;
+  brief: TripBrief | null;
 }
 
 export interface AlertView {
@@ -153,6 +174,7 @@ export class TripService {
   private readonly active = new Map<number, ActiveTrip>();
   private readonly alertIndex = new Map<number, { tripId: number; signalId: number }>();
   private readonly recent: RecordedEvent[] = [];
+  private readonly observers: TripObserver[] = [];
   private readonly watchdog: NodeJS.Timeout;
 
   constructor(
@@ -270,8 +292,10 @@ export class TripService {
       hospitalConfirmedAt: null,
       hospitalReadyAt: null,
       patientNote: null,
+      brief: null,
     };
     this.active.set(id, trip);
+    for (const o of this.observers) o.started?.({ tripId: id, routeId: route.id });
     const view = this.view(trip);
     // The driver's own channel too: a trip dispatched from the control room
     // (simulator) must appear on a driver phone that is already open.
@@ -299,6 +323,7 @@ export class TripService {
     this.trackStops(trip, res, now);
 
     const events = trip.engine.evaluate(res.progressM, trip.pipeline.etaSpeedMps, now);
+    for (const o of this.observers) o.progress?.({ tripId: trip.id, routeId: trip.route.id, regNo: trip.ambulance.regNo, progressM: res.progressM, etaSpeedMps: trip.pipeline.etaSpeedMps });
     for (const ev of events) {
       // A simulator skip "teleports" past junctions; their lead times aren't real.
       if (opts.relocate && ev.type === 'alert:passed') trip.skippedSignals.add(ev.signal.signalId);
@@ -359,6 +384,7 @@ export class TripService {
       audit(this.db, { userId: user === 'system' ? null : user.id, action: 'trip.end', entity: 'trip', entityId: trip.id, details: { reason } });
     });
     this.active.delete(trip.id);
+    for (const o of this.observers) o.ended?.({ tripId: trip.id, routeId: trip.route.id });
     for (const s of trip.engine.statuses()) if (s.alertId) this.alertIndex.delete(s.alertId);
     this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:ended', { tripId: trip.id, summary });
     this.log.info({ tripId: trip.id, reason }, 'trip ended');
@@ -387,6 +413,30 @@ export class TripService {
     const view = this.view(trip);
     this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:hospital', view);
     return view;
+  }
+
+  // ───────────────────────── AI paramedic brief ─────────────────────────
+
+  /** Only the trip's own driver (crew) or the control room may brief the hospital. Checked before spending on AI. */
+  assertCanBrief(tripId: number, user: AuthUser): void {
+    const trip = this.requireActive(tripId);
+    if (user.role !== 'admin' && user.id !== trip.driverId) throw new HttpError(403, 'not_your_trip');
+  }
+
+  setBrief(tripId: number, user: AuthUser, brief: PatientBrief, transcript: string): TripView {
+    const trip = this.requireActive(tripId);
+    this.assertCanBrief(tripId, user);
+    trip.brief = { ...brief, transcript, at: Date.now() };
+    this.db.prepare('UPDATE trips SET brief_json=? WHERE id=?').run(JSON.stringify(trip.brief), trip.id);
+    audit(this.db, { userId: user.id, action: 'trip.ai_brief', entity: 'trip', entityId: trip.id, details: { severity: brief.severity, category: brief.category } });
+    const view = this.view(trip);
+    this.emit([rooms.trip(trip.id), rooms.admin, rooms.hospital(trip.hospital.id)], 'trip:brief', { ...view, route: { ...view.route, coordinates: [] } });
+    return view;
+  }
+
+  /** Register a listener for trip lifecycle and progress (e.g. the Citizen Corridor). */
+  observe(o: TripObserver): void {
+    this.observers.push(o);
   }
 
   // ───────────────────────── queries ─────────────────────────
@@ -651,6 +701,7 @@ export class TripService {
       hospitalConfirmedAt: trip.hospitalConfirmedAt,
       hospitalReadyAt: trip.hospitalReadyAt,
       patientNote: trip.patientNote,
+      brief: trip.brief,
     };
   }
 

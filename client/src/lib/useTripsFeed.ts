@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useSocket } from './socket';
-import type { AlertView, Session, TripSummary, TripView } from './types';
+import type { AlertView, CitizenView, Session, TripSummary, TripView } from './types';
 
 export interface FeedEvent {
   id: number;
   ts: number;
-  kind: 'alert' | 'escalated' | 'ack' | 'passed' | 'trip' | 'offline' | 'online' | 'hospital';
+  kind: 'alert' | 'escalated' | 'ack' | 'passed' | 'trip' | 'offline' | 'online' | 'hospital' | 'brief';
   text: string;
   tripId: number;
 }
@@ -23,6 +23,10 @@ function describe(event: string, p: any, ts: number): FeedEvent | null {
   switch (event) {
     case 'trip:started':
       return line('trip', p.id, `Trip #${p.id} started → ${p.hospital.name}${p.simulated ? ' (simulated)' : ''}`);
+    case 'trip:brief':
+      return p.brief
+        ? line('brief', p.id, `AI brief → ${p.hospital.name}: ${p.brief.suspectedCondition} (${p.brief.severity.toUpperCase()})`)
+        : null;
     case 'trip:hospital':
       return line('hospital', p.id, `${p.hospital.name} updated trip #${p.id}`);
     case 'alert:new': {
@@ -65,6 +69,8 @@ export function useTripsFeed(
   const [simState, setSimState] = useState<Map<number, { speedKmh: number; paused: boolean }>>(new Map());
   /** Officer phones connected per junction id (control room only). */
   const [presence, setPresence] = useState<Record<number, number>>({});
+  /** Citizen Corridor cars (control room only). */
+  const [citizens, setCitizens] = useState<CitizenView[]>([]);
 
   const log = useCallback((event: string, payload: unknown) => {
     const e = describe(event, payload, Date.now());
@@ -101,8 +107,15 @@ export function useTripsFeed(
 
   const { connected, socket } = useSocket(session?.token, {
     presence: (p: Record<number, number>) => setPresence(p),
-    snapshot: (s: { trips: TripView[]; events?: { event: string; payload: unknown; ts: number }[]; presence?: Record<number, number> }) => {
+    citizens: (list: CitizenView[]) => setCitizens(list),
+    snapshot: (s: {
+      trips: TripView[];
+      events?: { event: string; payload: unknown; ts: number }[];
+      presence?: Record<number, number>;
+      citizens?: CitizenView[];
+    }) => {
       if (s.presence) setPresence(s.presence);
+      if (s.citizens) setCitizens(s.citizens);
       setTrips((prev) => {
         const next = new Map<number, TripView>();
         for (const t of s.trips) {
@@ -134,6 +147,10 @@ export function useTripsFeed(
       log('trip:started', v);
     },
     'location:update': mergeTrip,
+    'trip:brief': (v: TripView) => {
+      mergeTrip(v);
+      log('trip:brief', v);
+    },
     'trip:hospital': (v: TripView) => {
       mergeTrip(v);
       log('trip:hospital', v);
@@ -164,5 +181,5 @@ export function useTripsFeed(
     'sim:state': (s: { tripId: number; speedKmh: number; paused: boolean }) => setSimState((prev) => new Map(prev).set(s.tripId, s)),
   });
 
-  return { trips, events, ended, simState, presence, connected, socket, mergeTrip };
+  return { trips, events, ended, simState, presence, citizens, connected, socket, mergeTrip };
 }

@@ -4,6 +4,7 @@ import { seedIfEmpty } from '../src/seed.js';
 import { RouteCatalog, loadRouteSeeds } from '../src/services/catalog.js';
 import { TripService, type Notifier } from '../src/services/tripService.js';
 import { Simulator } from '../src/services/simulator.js';
+import { CitizenService } from '../src/services/citizens.js';
 import type { AuthUser } from '../src/auth.js';
 
 export interface Emitted {
@@ -31,6 +32,8 @@ export function makeStack() {
   };
   const trips = new TripService(db, catalog, notifier, log);
   const simulator = new Simulator(db, catalog, trips, notifier, log);
+  const citizens = new CitizenService(catalog, notifier, log);
+  trips.observe(citizens);
 
   const userByEmail = (email: string): AuthUser => {
     const u = db.prepare('SELECT id, role, name, city, hospital_id FROM users WHERE email = ?').get(email) as any;
@@ -43,6 +46,7 @@ export function makeStack() {
     catalog,
     trips,
     simulator,
+    citizens,
     emitted,
     onEmit: (l: (e: Emitted) => void) => listeners.push(l),
     userByEmail,
