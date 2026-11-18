@@ -27,6 +27,15 @@ export function setSirenWanted(owner: string, wanted: boolean, volume = 0.25) {
   else stopSiren();
 }
 
+// While a voice alert speaks, the siren drops to a murmur so the words are clear.
+const DUCK_FACTOR = 0.15;
+let ducked = false;
+let sirenVolume = 0.25;
+export function duckSiren(on: boolean) {
+  ducked = on;
+  if (siren && ctx) siren.gain.gain.setTargetAtTime(on ? sirenVolume * DUCK_FACTOR : sirenVolume, ctx.currentTime, 0.08);
+}
+
 function startSiren(volume: number) {
   if (!ctx || siren) return;
   // Two-tone wail: a square LFO swings the carrier between ~650 and ~950 Hz.
@@ -40,7 +49,8 @@ function startSiren(volume: number) {
   lfoGain.gain.value = 150;
   lfo.connect(lfoGain).connect(osc.frequency);
   const gain = ctx.createGain();
-  gain.gain.value = volume;
+  sirenVolume = volume;
+  gain.gain.value = ducked ? volume * DUCK_FACTOR : volume;
   osc.connect(gain).connect(ctx.destination);
   osc.start();
   lfo.start();

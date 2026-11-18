@@ -5,6 +5,7 @@ import {
   Pause, Play, QrCode, Radar, RotateCcw, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
 } from 'lucide-react';
 import { JudgeMode } from './JudgeMode';
+import { VoicePicker } from './VoicePicker';
 import { api, demoLogin, errorText } from '../lib/api';
 import { unlockAudio } from '../lib/alarm';
 import { fmtDistance, fmtDuration, fmtTime, STATE_STYLE } from '../lib/format';
@@ -134,6 +135,8 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
               {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
               <span className="hidden md:inline">{soundOn ? 'Sound on' : 'Sound off'}</span>
             </Button>
+            {/* Voice language for the officer phone mockup (follows the Sound switch). */}
+            {soundOn && <VoicePicker compact className="hidden lg:flex" />}
             <Button variant="ghost" className="min-h-9 px-3 text-sm" onClick={() => setJudgeOpen(true)} disabled={!route}>
               <QrCode size={15} />
               <span className="hidden md:inline">Judge mode</span>

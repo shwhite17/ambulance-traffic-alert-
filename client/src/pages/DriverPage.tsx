@@ -9,6 +9,9 @@ import { api, errorText } from '../lib/api';
 import { fmtDistance, fmtDuration } from '../lib/format';
 import { checkGps, useGpsSender } from '../lib/useGpsSender';
 import { useTripsFeed } from '../lib/useTripsFeed';
+import { useVoicePrefs } from '../lib/voice';
+import { useDriverVoice } from '../lib/useVoiceAlerts';
+import { VoicePicker } from '../components/VoicePicker';
 import type { Session, TripSummary, TripView } from '../lib/types';
 
 const EMERGENCY_TYPES = ['Cardiac', 'Trauma / accident', 'Stroke', 'Maternity', 'Respiratory', 'Other'];
@@ -178,6 +181,8 @@ const NEXT_STATUS: Record<string, { text: string; cls: string; icon: typeof Bell
 
 function LiveTrip({ session, trip, connected, onEnded }: { session: Session; trip: TripView; connected: boolean; onEnded: (s: TripSummary) => void }) {
   const gps = useGpsSender(trip.id, session.token, !trip.simulated);
+  const voice = useVoicePrefs();
+  useDriverVoice(trip, voice.on);
   const [error, setError] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const next = trip.nextSignal;
@@ -247,10 +252,13 @@ function LiveTrip({ session, trip, connected, onEnded }: { session: Session; tri
           <Stat icon={Clock} label="ETA" value={fmtDuration(trip.etaToHospitalS)} />
           <Stat icon={Gauge} label="km/h" value={pos ? String(pos.speedKmh) : '—'} />
         </div>
-        <p className="flex items-center gap-2 text-sm text-slate-400">
-          <Hospital size={16} className="text-info" /> {trip.hospital.name}
-          {trip.hospitalReadyAt ? <span className="font-semibold text-ok">· Team ready ✓</span> : trip.hospitalConfirmedAt ? <span>· Confirmed</span> : null}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-slate-400">
+            <Hospital size={16} className="shrink-0 text-info" /> <span className="truncate">{trip.hospital.name}</span>
+            {trip.hospitalReadyAt ? <span className="font-semibold text-ok">· Team ready ✓</span> : trip.hospitalConfirmedAt ? <span>· Confirmed</span> : null}
+          </p>
+          <VoicePicker compact />
+        </div>
         {confirmEnd ? (
           <div className="flex gap-2">
             <Button variant="danger" className="flex-1" onClick={end}>

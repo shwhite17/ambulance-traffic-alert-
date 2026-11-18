@@ -5,7 +5,10 @@ import { chirp, keepAwake, setSirenWanted, unlockAudio } from '../lib/alarm';
 import { fmtDistance } from '../lib/format';
 import { useSocket } from '../lib/socket';
 import type { AlertView, Session } from '../lib/types';
+import { speak } from '../lib/voice';
+import { useOfficerVoice } from '../lib/useVoiceAlerts';
 import { LogoMark } from './Logo';
+import { VoicePicker } from './VoicePicker';
 import { ConnectionDot, SimBadge } from './ui';
 
 interface OfficerInfo {
@@ -101,6 +104,7 @@ export function OfficerDashboard({
   const owner = `officer-${me}`;
   useEffect(() => setSirenWanted(owner, onDuty && soundEnabled && needsAck), [owner, onDuty, soundEnabled, needsAck]);
   useEffect(() => () => setSirenWanted(owner, false), [owner]);
+  useOfficerVoice(current, { active: onDuty && soundEnabled, isBackup: !!current && backupIds.has(current.signal.signalId) });
 
   useEffect(() => {
     if (!onDuty || autoStart) return;
@@ -162,12 +166,18 @@ export function OfficerDashboard({
           className="flex min-h-20 w-full max-w-sm items-center justify-center gap-3 rounded-2xl bg-ok px-6 text-2xl font-bold text-slate-950 shadow-[0_12px_40px_-10px_rgb(23_201_100/0.7)] focus-visible:ring-4 focus-visible:ring-white"
           onClick={() => {
             unlockAudio();
+            // Speaking inside the tap unlocks speech for later alerts, and confirms the volume is up.
+            speak((p) => p.voiceOn, { interrupt: true });
             setOnDuty(true);
           }}
         >
           <Power size={26} /> Start duty
         </button>
-        <p className="max-w-sm text-sm text-slate-400">Turns on the alarm sound and vibration, and keeps your screen awake.</p>
+        <div className="flex w-full max-w-sm flex-col items-center gap-2">
+          <p className="text-xs font-semibold tracking-[0.14em] text-slate-400 uppercase">Voice alerts</p>
+          <VoicePicker className="items-center" />
+        </div>
+        <p className="max-w-sm text-sm text-slate-400">Turns on the alarm sound, voice and vibration, and keeps your screen awake.</p>
         {onLogout && (
           <button className="text-sm text-slate-500 underline" onClick={onLogout}>
             Sign out
