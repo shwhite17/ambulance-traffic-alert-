@@ -19,6 +19,9 @@ const MESSAGES: Record<string, string> = {
   alert_not_active: 'This alert is no longer active.',
   trip_not_active: 'This trip has ended.',
   simulation_not_running: 'The simulation is no longer running.',
+  join_link_expired: 'This join link has expired.',
+  no_officer_for_signal: 'No officer is assigned to that junction.',
+  not_found: 'This feature is only available in demo mode.',
   network: 'No connection to the server.',
 };
 export const errorText = (e: unknown) =>

@@ -8,7 +8,8 @@ type Handlers = Record<string, (payload: any) => void>;
  * callers can pass inline functions without reconnecting on every render.
  * The server sends a `snapshot` on every (re)connect, so state self-heals.
  */
-export function useSocket(token: string | undefined, handlers: Handlers) {
+export function useSocket(token: string | undefined, handlers: Handlers, opts: { preview?: boolean } = {}) {
+  const preview = !!opts.preview;
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
   const handlersRef = useRef(handlers);
@@ -16,7 +17,8 @@ export function useSocket(token: string | undefined, handlers: Handlers) {
 
   useEffect(() => {
     if (!token) return;
-    const s = io({ auth: { token }, transports: ['websocket', 'polling'] });
+    // `preview`: the command centre's phone mockup; not counted as an officer on duty.
+    const s = io({ auth: { token, preview }, transports: ['websocket', 'polling'] });
     s.on('connect', () => setConnected(true));
     s.on('disconnect', () => setConnected(false));
     s.on('connect_error', () => setConnected(false));
@@ -26,7 +28,7 @@ export function useSocket(token: string | undefined, handlers: Handlers) {
       s.disconnect();
       setSocket(null);
     };
-  }, [token]);
+  }, [token, preview]);
 
   return { socket, connected };
 }

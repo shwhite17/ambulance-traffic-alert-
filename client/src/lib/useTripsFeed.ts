@@ -63,6 +63,8 @@ export function useTripsFeed(
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [ended, setEnded] = useState<Map<number, TripSummary>>(new Map());
   const [simState, setSimState] = useState<Map<number, { speedKmh: number; paused: boolean }>>(new Map());
+  /** Officer phones connected per junction id (control room only). */
+  const [presence, setPresence] = useState<Record<number, number>>({});
 
   const log = useCallback((event: string, payload: unknown) => {
     const e = describe(event, payload, Date.now());
@@ -98,7 +100,9 @@ export function useTripsFeed(
   };
 
   const { connected, socket } = useSocket(session?.token, {
-    snapshot: (s: { trips: TripView[]; events?: { event: string; payload: unknown; ts: number }[] }) => {
+    presence: (p: Record<number, number>) => setPresence(p),
+    snapshot: (s: { trips: TripView[]; events?: { event: string; payload: unknown; ts: number }[]; presence?: Record<number, number> }) => {
+      if (s.presence) setPresence(s.presence);
       setTrips((prev) => {
         const next = new Map<number, TripView>();
         for (const t of s.trips) {
@@ -160,5 +164,5 @@ export function useTripsFeed(
     'sim:state': (s: { tripId: number; speedKmh: number; paused: boolean }) => setSimState((prev) => new Map(prev).set(s.tripId, s)),
   });
 
-  return { trips, events, ended, simState, connected, socket, mergeTrip };
+  return { trips, events, ended, simState, presence, connected, socket, mergeTrip };
 }

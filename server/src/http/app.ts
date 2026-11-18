@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs';
 import { z, ZodError } from 'zod';
 import { config } from '../config.js';
 import { audit, type Db } from '../db.js';
-import { HttpError, requireAuth, signToken, userOf, type AuthUser } from '../auth.js';
+import { HttpError, requireAuth, signJoinToken, signToken, userOf, verifyJoinToken, type AuthUser } from '../auth.js';
 import type { RouteCatalog } from '../services/catalog.js';
 import type { TripService } from '../services/tripService.js';
 import type { Simulator } from '../services/simulator.js';
@@ -110,6 +110,36 @@ export function createApp({ db, catalog, trips, simulator, log, clientDist }: De
     const u = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as UserRow | undefined;
     if (!u) throw new HttpError(404, 'unknown_demo_account');
     audit(db, { userId: u.id, action: 'auth.demo_login' });
+    const user = toAuthUser(u);
+    res.json({ token: signToken(user), role: user.role, user });
+  });
+
+  // QR judge mode: the control room creates a link; scanning it signs a phone in
+  // as that junction's officer. The token encodes the junction, not a user, so
+  // it can't be widened to any other account.
+  api.post('/demo/join-link', demoOnly, requireAuth('admin'), (req, res) => {
+    const { signalId } = z.object({ signalId: z.number().int().positive() }).parse(req.body);
+    const sig = db.prepare('SELECT id, name, officer_id FROM signals WHERE id = ?').get(signalId) as
+      | { id: number; name: string; officer_id: number | null }
+      | undefined;
+    if (!sig?.officer_id) throw new HttpError(404, 'no_officer_for_signal');
+    const ttlMs = 2 * 60 * 60 * 1000;
+    audit(db, { userId: userOf(req).id, action: 'demo.join_link', entity: 'signal', entityId: sig.id });
+    res.json({ token: signJoinToken(sig.id, ttlMs / 1000), signal: { id: sig.id, name: sig.name }, expiresAt: Date.now() + ttlMs });
+  });
+  api.post('/demo/join', demoOnly, loginLimiter, (req, res) => {
+    const { token } = z.object({ token: z.string().min(10).max(2000) }).parse(req.body);
+    let signalId: number;
+    try {
+      ({ signalId } = verifyJoinToken(token));
+    } catch {
+      throw new HttpError(401, 'join_link_expired');
+    }
+    const u = db
+      .prepare('SELECT u.* FROM signals s JOIN users u ON u.id = s.officer_id WHERE s.id = ?')
+      .get(signalId) as UserRow | undefined;
+    if (!u) throw new HttpError(404, 'no_officer_for_signal');
+    audit(db, { userId: u.id, action: 'auth.qr_join', entity: 'signal', entityId: signalId });
     const user = toAuthUser(u);
     res.json({ token: signToken(user), role: user.role, user });
   });

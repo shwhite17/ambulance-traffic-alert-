@@ -31,12 +31,32 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
     },
   };
 
+  /**
+   * Officer phones connected per junction (primary officers only), e.g. { 7: 3 }.
+   * The command centre's phone mockup connects with `preview` and isn't counted.
+   */
+  function presence(): Record<number, number> {
+    const out: Record<number, number> = {};
+    for (const s of io.of('/').sockets.values()) {
+      if (s.data.preview) continue;
+      for (const room of s.rooms) {
+        if (room.startsWith('signal:')) {
+          const id = Number(room.slice(7));
+          out[id] = (out[id] ?? 0) + 1;
+        }
+      }
+    }
+    return out;
+  }
+  const pushPresence = () => io.to(rooms.admin).emit('presence', presence());
+
   function attach(trips: TripService) {
     io.use((socket, next) => {
       try {
         const token = socket.handshake.auth?.token;
         if (typeof token !== 'string') return next(new Error('unauthenticated'));
         socket.data.user = verifyToken(token);
+        socket.data.preview = socket.handshake.auth?.preview === true;
         next();
       } catch {
         next(new Error('invalid_token'));
@@ -61,7 +81,13 @@ export function createRealtime(httpServer: HttpServer, log: Logger) {
         alerts: user.role === 'officer' ? trips.officerAlerts(user) : [],
         // Lets the control-room feed survive a page reload.
         events: user.role === 'admin' ? trips.recentEvents() : [],
+        presence: user.role === 'admin' ? presence() : {},
       });
+      if (user.role === 'officer') {
+        pushPresence();
+        // Rooms are left after 'disconnect' fires, so count on the next tick.
+        socket.on('disconnect', () => setImmediate(pushPresence));
+      }
 
       // Drivers join a trip room right after creating a trip.
       socket.on('trip:join', (tripId: unknown, ack?: (r: { ok: boolean; error?: string }) => void) => {

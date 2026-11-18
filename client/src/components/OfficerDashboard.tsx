@@ -81,7 +81,8 @@ export function OfficerDashboard({
     },
     'alert:closed': (a: AlertView) => drop(a.signal.signalId),
     'demo:reset': () => setAlerts(new Map()),
-  });
+    // autoStart is only used by the command centre's phone mockup: don't count it as on duty.
+  }, { preview: autoStart });
 
   useEffect(() => () => removeTimers.current.forEach((t) => window.clearTimeout(t)), []);
 

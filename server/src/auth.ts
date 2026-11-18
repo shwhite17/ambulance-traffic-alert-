@@ -11,16 +11,33 @@ export interface AuthUser {
   hospitalId: string | null;
 }
 
+// Distinct audiences keep token kinds from being swapped: a QR join token can
+// never be used as a session token, and vice versa.
+const SESSION_AUD = 'session';
+const JOIN_AUD = 'officer-join';
+
 export function signToken(u: AuthUser): string {
   return jwt.sign({ role: u.role, name: u.name, city: u.city, hospitalId: u.hospitalId }, config.jwtSecret, {
     subject: String(u.id),
+    audience: SESSION_AUD,
     expiresIn: config.jwtTtl,
   });
 }
 
 export function verifyToken(token: string): AuthUser {
-  const p = jwt.verify(token, config.jwtSecret) as jwt.JwtPayload;
+  const p = jwt.verify(token, config.jwtSecret, { audience: SESSION_AUD }) as jwt.JwtPayload;
   return { id: Number(p.sub), role: p.role, name: p.name, city: p.city ?? null, hospitalId: p.hospitalId ?? null };
+}
+
+/** Short-lived link token that can only sign in as one junction's officer (demo QR). */
+export function signJoinToken(signalId: number, ttl: jwt.SignOptions['expiresIn'] = '2h'): string {
+  return jwt.sign({ sig: signalId }, config.jwtSecret, { audience: JOIN_AUD, expiresIn: ttl });
+}
+
+export function verifyJoinToken(token: string): { signalId: number } {
+  const p = jwt.verify(token, config.jwtSecret, { audience: JOIN_AUD }) as jwt.JwtPayload;
+  if (typeof p.sig !== 'number') throw new Error('invalid_join_token');
+  return { signalId: p.sig };
 }
 
 declare module 'express-serve-static-core' {

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, Ambulance, Bell, CheckCheck, Clock, FastForward, Gauge, History, Hospital, ListOrdered, OctagonAlert,
-  Pause, Play, Radar, RotateCcw, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
+  Pause, Play, QrCode, Radar, RotateCcw, ShieldCheck, Siren, Smartphone, Square, Timer, Volume2, VolumeX, WifiOff, X,
 } from 'lucide-react';
+import { JudgeMode } from './JudgeMode';
 import { api, demoLogin, errorText } from '../lib/api';
 import { unlockAudio } from '../lib/alarm';
 import { fmtDistance, fmtDuration, fmtTime, STATE_STYLE } from '../lib/format';
@@ -38,6 +39,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
   const [summary, setSummary] = useState<TripSummary | null>(null);
   const [officers, setOfficers] = useState<Map<number, Session>>(new Map());
   const [backup, setBackup] = useState<Session | null>(null);
+  const [judgeOpen, setJudgeOpen] = useState(false);
   const feed = useTripsFeed(session, { onEnded: (_id, s) => setSummary(s), onReset: () => setSummary(null) });
 
   useEffect(() => {
@@ -132,6 +134,10 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
               {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
               <span className="hidden md:inline">{soundOn ? 'Sound on' : 'Sound off'}</span>
             </Button>
+            <Button variant="ghost" className="min-h-9 px-3 text-sm" onClick={() => setJudgeOpen(true)} disabled={!route}>
+              <QrCode size={15} />
+              <span className="hidden md:inline">Judge mode</span>
+            </Button>
             <ResetDemoButton session={session} onError={setError} />
             <ConnectionDot connected={feed.connected} />
             <Link to={mode === 'demo' ? '/control' : '/demo'} className="hidden text-sm text-slate-400 hover:text-white lg:block">
@@ -172,7 +178,7 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
 
             {/* Corridor + events */}
             <div className="flex min-h-0 flex-col gap-3">
-              <Corridor route={route} statuses={statuses} signalInfo={signalInfo} onAck={ack} canAck={mode === 'control' || officers.size > 0} />
+              <Corridor route={route} statuses={statuses} signalInfo={signalInfo} presence={feed.presence} onAck={ack} canAck={mode === 'control' || officers.size > 0} />
               <EventTimeline events={feed.events} />
               {mode === 'control' && <RecentTrips session={session} refreshKey={feed.ended.size + feed.trips.size} />}
             </div>
@@ -196,6 +202,8 @@ export function CommandCenter({ session, mode, onLogout }: { session: Session; m
           </div>
         )}
       </div>
+
+      {judgeOpen && route && <JudgeMode session={session} route={route} presence={feed.presence} onClose={() => setJudgeOpen(false)} />}
 
       {summary && !trip && (
         <div className="fixed inset-0 z-[2000] grid place-items-center bg-black/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Trip summary">
@@ -358,12 +366,14 @@ function Corridor({
   route,
   statuses,
   signalInfo,
+  presence,
   onAck,
   canAck,
 }: {
   route: RouteInfo;
   statuses: Map<number, SignalView>;
   signalInfo: Map<number, SignalInfo>;
+  presence: Record<number, number>;
   onAck: (s: SignalView) => void;
   canAck: boolean;
 }) {
@@ -393,9 +403,16 @@ function Corridor({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-white">{def.name}</p>
-                    <p className="truncate text-xs text-slate-500">
-                      {def.code} · {info?.officer ? 'officer on duty' : 'no officer'}
-                      {info?.backupOfficer ? ' + backup' : ''}
+                    <p className="flex items-center gap-1.5 truncate text-xs text-slate-500">
+                      {def.code}
+                      {(presence[def.id] ?? 0) > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-ok/15 px-1.5 font-semibold text-emerald-300" title="Officer phones connected">
+                          <Smartphone size={11} />
+                          {presence[def.id]} on duty
+                        </span>
+                      ) : (
+                        <span>· {info?.officer ? 'officer assigned' : 'no officer'}</span>
+                      )}
                     </p>
                   </div>
                   <StateBadge state={state} />
