@@ -1,0 +1,74 @@
+import type { Server as HttpServer } from 'node:http';
+import { Server } from 'socket.io';
+import type { Logger } from 'pino';
+import { config } from './config.js';
+import { verifyToken, type AuthUser } from './auth.js';
+import { rooms, type Notifier, type TripService } from './services/tripService.js';
+
+/**
+ * Socket.IO gateway. Rooms are assigned server-side from the JWT, so a client
+ * can never subscribe to a junction or trip it isn't entitled to. On every
+ * (re)connect the client gets a snapshot of current state, so a dropped
+ * connection never hides a live alert.
+ */
+export function createRealtime(httpServer: HttpServer, log: Logger) {
+  const io = new Server(httpServer, {
+    cors: { origin: config.corsOrigin.split(',') },
+    // Detect dead officer phones quickly.
+    pingInterval: 10_000,
+    pingTimeout: 8_000,
+  });
+
+  const notifier: Notifier = {
+    emit(targets, event, payload) {
+      io.to(targets).emit(event, payload);
+    },
+  };
+
+  function attach(trips: TripService) {
+    io.use((socket, next) => {
+      try {
+        const token = socket.handshake.auth?.token;
+        if (typeof token !== 'string') return next(new Error('unauthenticated'));
+        socket.data.user = verifyToken(token);
+        next();
+      } catch {
+        next(new Error('invalid_token'));
+      }
+    });
+
+    io.on('connection', (socket) => {
+      const user = socket.data.user as AuthUser;
+      if (user.role === 'admin') socket.join(rooms.admin);
+      if (user.role === 'hospital' && user.hospitalId) socket.join(rooms.hospital(user.hospitalId));
+      if (user.role === 'officer') {
+        const mine = trips.officerSignals(user.id);
+        for (const id of mine.primary) socket.join(rooms.signal(id));
+        for (const id of mine.backup) socket.join(rooms.backup(id));
+      }
+      const active = trips.activeTripsFor(user);
+      if (user.role === 'driver') for (const t of active) socket.join(rooms.trip(t.id));
+
+      socket.emit('snapshot', {
+        trips: active,
+        alerts: user.role === 'officer' ? trips.officerAlerts(user) : [],
+      });
+
+      // Drivers join a trip room right after creating a trip.
+      socket.on('trip:join', (tripId: unknown, ack?: (r: { ok: boolean; error?: string }) => void) => {
+        try {
+          if (typeof tripId !== 'number') throw new Error('invalid_trip');
+          trips.getTrip(tripId, user); // throws if not permitted
+          socket.join(rooms.trip(tripId));
+          ack?.({ ok: true });
+        } catch (e) {
+          ack?.({ ok: false, error: e instanceof Error ? e.message : 'error' });
+        }
+      });
+
+      log.debug({ userId: user.id, role: user.role }, 'socket connected');
+    });
+  }
+
+  return { io, notifier, attach };
+}

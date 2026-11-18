@@ -1,0 +1,25 @@
+{
+  "name": "ambulance-traffic-alert",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Warns traffic officers ~60 s / 500 m before an ambulance reaches their junction. No signal hardware needed.",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c red,blue \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "npm run start -w server",
+    "test": "npm test -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}
