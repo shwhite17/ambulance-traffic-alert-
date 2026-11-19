@@ -10,3 +10,4 @@ dist/
 scripts/out/
 coverage/
 .DS_Store
+*.zip
